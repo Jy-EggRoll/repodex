@@ -1,5 +1,5 @@
 ---
-title: 项目介绍——repodex
+title: 项目介绍-RepoDex
 description: 基于 GitHub Actions、Cloudflare Workers 和传统前端技术（当前，后期有向框架迁移的准备），实现了一套跨仓库、跨分支的多维度模糊搜索系统，以提升用户在 GitHub 上的文件检索效率。
 date: 2026-01-16
 lastmod: 2026-01-16
@@ -16,6 +16,8 @@ weight: 1
 # RepoDex
 
 命名：RepositoryIndex——仓库索引聚合。
+
+- 博客文章链接（和 README 完全相同）：[项目介绍-RepoDex](https://eggroll.pages.dev/p/项目介绍-repodex/)
 
 ## 为什么要开发此项目
 
