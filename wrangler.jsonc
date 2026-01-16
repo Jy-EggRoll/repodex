@@ -2,37 +2,17 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "repodex",
   "main": "src/index.ts",
-  "compatibility_date": "2026-01-15"
-  // "compatibility_flags": [
-  //   "nodejs_compat"
-  // ],
-  // "vars": {
-  //   "MY_VAR": "my-variable"
-  // },
-  // "kv_namespaces": [
-  //   {
-  //     "binding": "MY_KV_NAMESPACE",
-  //     "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  //   }
-  // ],
-  // "r2_buckets": [
-  //   {
-  //     "binding": "MY_BUCKET",
-  //     "bucket_name": "my-bucket"
-  //   }
-  // ],
-  // "d1_databases": [
-  //   {
-  //     "binding": "MY_DB",
-  //     "database_name": "my-database",
-  //     "database_id": ""
-  //   }
-  // ],
-  // "ai": {
-  //   "binding": "AI"
-  // },
-  // "observability": {
-  //   "enabled": true,
-  //   "head_sampling_rate": 1
-  // }
+  "compatibility_date": "2026-01-10",
+  "assets": {
+    "directory": "./public/",
+    "binding": "public_assets",
+    "run_worker_first": true
+  },
+  "kv_namespaces": [
+    {
+      "binding": "repo_index_kv",
+      "id": "48dee98bdd2846aa8f79f6cf0562916e",
+      "remote": true // 始终使用远程 KV 数据库（本地开发时有用）
+    }
+  ]
 }
