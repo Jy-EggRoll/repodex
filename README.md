@@ -1,3 +1,18 @@
+---
+title: 项目介绍——repodex
+description: 基于 GitHub Actions、Cloudflare Workers 和传统前端技术（当前，后期有向框架迁移的准备），实现了一套跨仓库、跨分支的多维度模糊搜索系统，以提升用户在 GitHub 上的文件检索效率。
+date: 2026-01-16
+lastmod: 2026-01-16
+image: 
+categories:
+    - 技术
+tags:
+    - Cloudflare
+    - GitHub
+    - 模糊搜索
+weight: 1
+---
+
 # RepoDex
 
 命名：RepositoryIndex——仓库索引聚合。
@@ -16,17 +31,17 @@
 
 ### 移动端的优良适配
 
-![移动端](readme_img/移动端.png)
+![移动端](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/移动端.png)
 
 上图采用“按名称搜索”，您可以从中看出中英文、全拼、简拼的匹配效果。
 
-![选择索引](readme_img/选择索引.png)
+![选择索引](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/选择索引.png)
 
 本项目支持选择索引，默认全选。选中或取消选中后会在短暂的防抖延时后自动刷新结果列表。
 
 ### 美观的宽屏布局
 
-![宽屏](readme_img/宽屏.png)
+![宽屏](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/宽屏.png)
 
 对于仓库显示的标签，`>900MB` 是危险，`800~900MB` 是警告，`<800MB` 是安全。用户不应该存储大于 1GB 的仓库，这其中有很多原因，此处不再赘述。
 
@@ -50,39 +65,41 @@
 
 请自行先注册一个 Cloudflare 账号。地址：<https://dash.cloudflare.com/login>。
 
-### fork 本项目
+### Fork 本项目
 
-![fork](readme_img/image.png)
+![Fork](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image.png)
 
 如果您愿意为本项目点一个 star，我将非常感激。
 
 ### 创建 Workers 并绑定到 GitHub
 
-![创建流程](readme_img/image-1.png)
+![创建流程](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-1.png)
 
-请复制 Account ID 【信息 1】并记录到安全的地方，之后有用。
+请复制 Account ID 【信息 1】并记录到安全的地方，后续将使用该信息。
 
-![连接-GitHub](readme_img/image-2.png)
+![连接-GitHub](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-2.png)
 
-请连接到 GitHub，如需授权，请放心授权。连接后选择自己 fork 的项目即可。
+请连接到 GitHub，如需授权，请放心授权。连接后选择自己 Fork 的项目即可。
 
 选择后直接部署即可，不需要改动任何默认值。
 
 ### 创建 Workers KV
 
-![创建-KV](readme_img/image-3.png)
+![创建-KV](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-3.png)
 
 请按照图中指示创建 KV，名称随意，刷新后点击 ID 即可复制 ID【信息 2】，请记录到安全的地方。
 
 ### 创建 Cloudflare Token
 
-![创建令牌](readme_img/image-4.png)
+![创建令牌](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-4.png)
 
 请按照图示创建拥有 Workers KV 存储权限的令牌。
 
 令牌创建成功后只会展示一次，默认创建无限期令牌，请复制到安全的地方【信息 3】。
 
-**请注意：令牌泄露后风险极大，请务必妥善保护！**
+> [!CAUTION]
+>
+> 请注意：令牌泄露后风险极大，请务必妥善保护！
 
 ### 创建 GitHub Token
 
@@ -90,9 +107,13 @@
 
 地址为 <https://github.com/settings/tokens>。
 
-![GitHub-Token](readme_img/image-9.png)
+![GitHub-Token](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-9.png)
 
 请按图中指引，创建拥有完整 repo 权限的 token，**可以选择永不过期，但是务必妥善保存**。创建后请复制【信息 4】。
+
+> [!CAUTION]
+>
+> 请注意：令牌泄露后风险极大，请务必妥善保护！
 
 ### 在需要接入搜索的仓库配置的内容
 
@@ -100,7 +121,7 @@
 
 创建机密的位置：
 
-![机密](readme_img/image-5.png)
+![机密](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-5.png)
 
 请注意，本处 repodex 仓库仅作为演示，需要配置机密的仓库是**要接入索引**的仓库，您想要在哪个仓库中搜索文件，就在哪个仓库中配置三个机密。
 
@@ -118,13 +139,13 @@
 
 请复制该完整路径，粘贴到：
 
-![位置指引](readme_img/image-6.png)
+![位置指引](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-6.png)
 
-![指导](readme_img/image-7.png)
+![指导](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-7.png)
 
 **提交后，工作流将自动开始执行。**
 
-工作流内容如下，您可以一并复制：
+工作流内容如下，您可以一并复制。若您需要本地 `yml` 文件，请下载仓库 `workflows` 下的 `generate-index-and-push.yml`。
 
 ```yml
 name: Generate Repository File Index JSON and Push to KV
@@ -297,7 +318,7 @@ jobs:
 
 本部分请注意，回到了 Cloudflare Workers 平台。
 
-![Cloudflare-机密位置](readme_img/image-8.png)
+![Cloudflare-机密位置](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-8.png)
 
 请添加以下机密，类型均为“密钥”：
 
@@ -318,6 +339,10 @@ jobs:
 工作流的任务：
 
 作为标准化挂件接入目标仓库后，当仓库**任意分支触发代码推送**，或通过**手动方式启动**时，即可执行该工作流。工作流会遍历仓库所有分支下的所有文件，生成统一的全局索引文件，随后将该索引文件推送至 Cloudflare KV 存储。
+
+## 统计
+
+[![Stargazers over time](https://starchart.cc/Jy-EggRoll/repodex.svg?variant=adaptive)](https://starchart.cc/Jy-EggRoll/repodex)
 
 ## 鸣谢
 
