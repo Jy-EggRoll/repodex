@@ -1,11 +1,11 @@
 ---
-title: 项目介绍-RepoDex
+title: 项目介绍-repodex
 description: 基于 GitHub Actions、Cloudflare Workers 和传统前端技术（当前，后期有向框架迁移的准备），实现了一套跨仓库、跨分支的多维度模糊搜索系统，以提升用户在 GitHub 上的文件检索效率。
 date: 2026-01-16
-lastmod: 2026-01-16
+lastmod: 2026-06-26
 image: 
 categories:
-    - 技术
+    - 项目
 tags:
     - Cloudflare
     - GitHub
@@ -344,7 +344,7 @@ jobs:
 
 ## 统计
 
-[![Stargazers over time](https://starchart.cc/Jy-EggRoll/repodex.svg?variant=adaptive)](https://starchart.cc/Jy-EggRoll/repodex)
+[![Star History Chart](https://api.star-history.com/chart?repos=jy-eggroll/repodex&type=date&legend=top-left)](https://www.star-history.com/?repos=jy-eggroll%2Fmykeymap-enhance&type=date&legend=top-left)
 
 ## 鸣谢
 
