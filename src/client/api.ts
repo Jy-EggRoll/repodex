@@ -34,13 +34,26 @@ export async function fetchIndexList(): Promise<string[]> {
   return res.json();
 }
 
-export async function searchFiles(q: string, fileParam: string, mode: 'path' | 'name'): Promise<SearchResult[]> {
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+  total: number;
+}
+
+export async function searchFiles(q: string, fileParam: string, mode: 'path' | 'name'): Promise<SearchResponse> {
   const res = await fetch(
     `/api/search?q=${encodeURIComponent(q)}&file=${encodeURIComponent(fileParam)}&mode=${mode}`,
   );
   if (!res.ok) {
     const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
-    throw new Error(body.error || `请求失败 ${res.status}`);
+    throw new ApiError(res.status, body.error || `请求失败 ${res.status}`);
   }
   return res.json();
 }

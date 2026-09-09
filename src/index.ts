@@ -78,6 +78,33 @@ interface RepoInfoCache {
 const app = new Hono<{ Bindings: Bindings }>()
 
 const ALL_KEY = '__ALL_INDEX__';
+// 解析后的 items 缓存 TTL（秒）：连击输入时跳过 KV 读 + parse + merge
+const ITEMS_CACHE_TTL = 120;
+// 单次搜索最多返回条数：只截断高亮构建 + 序列化，total 仍返回全量计数
+const MAX_RESULTS = 300;
+
+async function getCachedItems(cacheKey: string, loader: () => Promise<SearchItem[]>): Promise<SearchItem[]> {
+  const url = `https://repodex-items.local/${encodeURIComponent(cacheKey)}`;
+  const cache = await caches.open('repodex-items');
+  try {
+    const hit = await cache.match(url);
+    if (hit) return (await hit.json()) as SearchItem[];
+  } catch {
+    // miss：继续走 KV 加载
+  }
+  const items = await loader();
+  try {
+    await cache.put(
+      url,
+      new Response(JSON.stringify(items), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': `max-age=${ITEMS_CACHE_TTL}` },
+      }),
+    );
+  } catch {
+    // 缓存写失败不影响返回
+  }
+  return items;
+}
 
 function basename(p: string) {
   if (!p) return '';
@@ -224,57 +251,68 @@ app.get('/api/search', async (c) => {
 
 
     const cacheKey = (file === 'all' || !file) ? ALL_KEY : file;
-    const merged: SearchItem[] = [];
-    if (cacheKey === ALL_KEY) {
+    const isSingle = cacheKey !== ALL_KEY && !cacheKey.includes(',');
+    if (isSingle && (cacheKey.includes('..') || cacheKey.includes('/'))) {
+      return c.json({ error: 'invalid file' }, 400);
+    }
+    items = await getCachedItems(cacheKey, async () => {
+      const merged: SearchItem[] = [];
+      if (cacheKey === ALL_KEY) {
 
-      let filesList: string[] = [];
-      try {
-        const kvList = await c.env.repo_index_kv.list({ limit: 1000 });
-        filesList = Array.isArray(kvList.keys) ? kvList.keys.map((k: any) => k.name) : [];
-      } catch (e) { filesList = []; }
-
-      for (const fname of filesList) {
+        let filesList: string[] = [];
         try {
-          if (!fname) continue;
-          const fj = await loadIndexByName(c, fname);
-          if (!fj) continue;
-          parseIndexJson(fj, merged);
-        } catch (e) {
-          console.error(`Failed to load index ${fname}:`, e);
-        }
-      }
-    } else if (cacheKey.includes(',')) {
+          const kvList = await c.env.repo_index_kv.list({ limit: 1000 });
+          filesList = Array.isArray(kvList.keys) ? kvList.keys.map((k: any) => k.name) : [];
+        } catch (e) { filesList = []; }
 
-      const fileList = cacheKey.split(',').map(s => s.trim()).filter(Boolean);
-      const seen = new Set<string>();
-      for (const fname of fileList) {
-        try {
-          if (!fname || fname.includes('..') || fname.includes('/')) continue;
-
-          const fj = await loadIndexByName(c, fname);
-          if (!fj) continue;
-          const temp: SearchItem[] = [];
-          parseIndexJson(fj, temp);
-
-          for (const it of temp) {
-            const key = `${it.repository || ''}|${it.branch || ''}|${it.path || ''}|${it.type || ''}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            merged.push(it);
+        for (const fname of filesList) {
+          try {
+            // 只加载仓库索引，跳过 repo-info-cache 等其它 key
+            if (!fname || !fname.endsWith('-index')) continue;
+            const fj = await loadIndexByName(c, fname);
+            if (!fj) continue;
+            parseIndexJson(fj, merged);
+          } catch (e) {
+            console.error(`Failed to load index ${fname}:`, e);
           }
-        } catch (e) {
-          console.error(`Failed to load index ${fname}:`, e);
         }
-      }
-    } else {
+      } else if (cacheKey.includes(',')) {
 
-      if (cacheKey.includes('..') || cacheKey.includes('/')) return c.json({ error: 'invalid file' }, 400);
+        const fileList = cacheKey.split(',').map(s => s.trim()).filter(Boolean);
+        const seen = new Set<string>();
+        for (const fname of fileList) {
+          try {
+            if (!fname || fname.includes('..') || fname.includes('/')) continue;
+
+            const fj = await loadIndexByName(c, fname);
+            if (!fj) continue;
+            const temp: SearchItem[] = [];
+            parseIndexJson(fj, temp);
+
+            for (const it of temp) {
+              const key = `${it.repository || ''}|${it.branch || ''}|${it.path || ''}|${it.type || ''}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              merged.push(it);
+            }
+          } catch (e) {
+            console.error(`Failed to load index ${fname}:`, e);
+          }
+        }
+      } else {
+
+        const fj = await loadIndexByName(c, cacheKey);
+        if (!fj) return merged;
+        parseIndexJson(fj, merged);
+      }
+
+      return merged;
+    });
+    if (isSingle && items.length === 0) {
+      // 区分“索引不存在”与“索引为空”：空结果时复查一次 KV
       const fj = await loadIndexByName(c, cacheKey);
       if (!fj) return c.json({ error: 'not found' }, 404);
-      parseIndexJson(fj, merged);
     }
-
-    items = merged;
 
     const mode = (c.req.query('mode') || 'path').trim();
 
@@ -329,7 +367,7 @@ app.get('/api/search', async (c) => {
     }
 
     results.sort((a, b) => b.score - a.score);
-    return c.json(results);
+    return c.json({ results: results.slice(0, MAX_RESULTS), total: results.length });
   } catch (err) {
     return c.json({ error: 'failed to search', details: String(err) }, 500);
   }

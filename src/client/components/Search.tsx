@@ -1,7 +1,7 @@
 import { memo, startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input, Switch, Checkbox, Badge, Dialog, Banner, Loader, Empty } from '@cloudflare/kumo';
 import { X } from '@phosphor-icons/react';
-import { fetchIndexList, searchFiles, type SearchResult } from '../api';
+import { ApiError, fetchIndexList, searchFiles, type SearchResult } from '../api';
 import ResultCard from './ResultCard';
 
 const PAGE_SIZE = 100;
@@ -45,15 +45,18 @@ export default function Search() {
   const [loadingIndexes, setLoadingIndexes] = useState(false);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [results, setResults] = useState<SearchResult[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // 输入框非受控：敲字只走 DOM，不触发 React 渲染，从根上消除输入卡顿
   const inputRef = useRef<HTMLInputElement>(null);
   const composingRef = useRef(false);
-  // 单调请求序号：过期响应直接丢弃，保证结果收敛到最后一次输入
-  const requestIdRef = useRef(0);
+  // 请求串行合并：有请求在飞时只记下最新值，回来后立刻补发，无延迟、不吞键
+  const inflightRef = useRef(false);
+  const pendingRef = useRef<{ q: string; list: string[]; nameMode: boolean } | null>(null);
 
   useEffect(() => {
     async function loadIndexes() {
@@ -74,27 +77,37 @@ export default function Search() {
   async function doSearch(q: string, list: string[], nameMode: boolean) {
     const v = q.trim();
     if (!v) return;
-    const id = ++requestIdRef.current;
+    inflightRef.current = true;
     setError('');
+    setErrorStatus(null);
     setSearching(true);
     try {
       const fileParam = list.length > 0 && list.length !== indexes.length ? list.join(',') : 'all';
       const data = await searchFiles(v, fileParam, nameMode ? 'name' : 'path');
-      if (id !== requestIdRef.current) return;
       setVisibleCount(PAGE_SIZE);
+      setTotal(data.total);
       startTransition(() => {
-        setResults(data);
+        setResults(data.results);
       });
     } catch (e) {
-      if (id !== requestIdRef.current) return;
+      setErrorStatus(e instanceof ApiError ? e.status : null);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      if (id === requestIdRef.current) setSearching(false);
+      inflightRef.current = false;
+      setSearching(false);
+      const p = pendingRef.current;
+      pendingRef.current = null;
+      if (p && p.q.trim()) void doSearch(p.q, p.list, p.nameMode);
     }
   }
 
   function searchFromInput(list = checked, nameMode = byName) {
-    doSearch(inputRef.current?.value ?? '', list, nameMode);
+    const q = inputRef.current?.value ?? '';
+    if (inflightRef.current) {
+      pendingRef.current = { q, list, nameMode };
+      return;
+    }
+    void doSearch(q, list, nameMode);
   }
 
   function toggleOne(name: string, on: boolean) {
@@ -199,7 +212,24 @@ export default function Search() {
         </div>
       </div>
 
-      {error && <div className="mt-4"><Banner variant="error" title="搜索失败" description={error} /></div>}
+      {error && (
+        <div className="mt-4">
+          <Banner
+            variant="error"
+            title="搜索失败"
+            description={
+              errorStatus === 503
+                ? '服务端计算超时，请缩短关键词、只选单个索引后重试。'
+                : error
+            }
+          />
+          <div className="mt-2">
+            <Button variant="secondary" size="sm" onClick={() => searchFromInput()}>
+              重试
+            </Button>
+          </div>
+        </div>
+      )}
       {searching && (
         <div className="mt-4 flex items-center gap-2">
           <Loader size="sm" />
@@ -213,7 +243,7 @@ export default function Search() {
         )}
         {visibleResults !== null && visibleResults.length > 0 && results !== null && (
           <div>
-            <h2 className="mb-2 text-lg font-semibold text-kumo-strong">匹配结果（{results.length}）</h2>
+            <h2 className="mb-2 text-lg font-semibold text-kumo-strong">匹配结果（共 {total} 条）</h2>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
               {visibleResults.map((item, i) => (
                 <ResultRow
