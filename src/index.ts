@@ -10,6 +10,68 @@ type Bindings = {
   repo_index_kv: KVNamespace;
 }
 
+interface IndexFile {
+  name: string;
+  path: string;
+  size: number;
+}
+
+interface IndexDirectory {
+  name: string;
+  path: string;
+}
+
+interface IndexBranch {
+  branch_name: string;
+  files: IndexFile[];
+  directories: IndexDirectory[];
+}
+
+interface IndexJson {
+  repository: string;
+  repository_short_name: string;
+  branches: IndexBranch[];
+}
+
+interface RepoInfo {
+  name: string;
+  size: number;
+  size_mb: number;
+  risk: 'safe' | 'warn' | 'danger';
+  description: string | null;
+  html_url: string;
+}
+
+interface SearchItem {
+  name: string;
+  repository: string;
+  branch: string;
+  path: string;
+  size: number | undefined;
+  github_url: string | undefined;
+  type: 'file' | 'directory';
+}
+
+interface SearchResult {
+  name: string;
+  repository: string;
+  branch: string;
+  path: string;
+  size: number | undefined;
+  size_mb: number;
+  type: 'file' | 'directory';
+  github_url: string | undefined;
+  ranges: [number, number][];
+  score: number;
+  highlightedPath?: string;
+  highlightedName?: string;
+}
+
+interface RepoInfoCache {
+  data: RepoInfo[];
+  timestamp: number;
+}
+
 const app = new Hono<{ Bindings: Bindings }>()
 
 const ALL_KEY = '__ALL_INDEX__';
@@ -26,13 +88,13 @@ app.use(prettyJSON({
   force: true
 }))
 
-async function loadIndexByName(c: any, base: string, name: string) {
+async function loadIndexByName(c: any, name: string): Promise<IndexJson | null> {
   if (!name) return null;
   if (c.env && c.env.repo_index_kv) {
     try {
       const jsonValueOfName = await c.env.repo_index_kv.get(name);
       if (!jsonValueOfName) return null;
-      return JSON.parse(jsonValueOfName);
+      return JSON.parse(jsonValueOfName) as IndexJson;
     } catch (e) {
       return null;
     }
@@ -40,18 +102,37 @@ async function loadIndexByName(c: any, base: string, name: string) {
   return null;
 }
 
-async function getAllRepos(token: string): Promise<any[]> {
+async function getAllRepos(token: string): Promise<RepoInfo[]> {
   const octokit = new Octokit({
     auth: token,
     request: { timeout: 10000 }
   });
-  const repos: any[] = [];
+  const repos: RepoInfo[] = [];
   let page = 1;
   const perPage = 100;
   while (true) {
     const response = await octokit.request("GET /user/repos", { type: "all", per_page: perPage, page });
     if (response.data.length === 0) break;
-    repos.push(...response.data);
+    for (const item of response.data) {
+      const size_kb = Number(item.size) || 0;
+      const size_mb = Math.round((size_kb / 1024) * 100) / 100;
+      let risk: 'safe' | 'warn' | 'danger' = 'safe';
+      if (size_mb < 800) {
+        risk = 'safe';
+      } else if (size_mb <= 900) {
+        risk = 'warn';
+      } else {
+        risk = 'danger';
+      }
+      repos.push({
+        name: item.name,
+        size: size_kb,
+        size_mb,
+        risk,
+        description: item.description,
+        html_url: item.html_url
+      });
+    }
     page++;
   }
   return repos;
@@ -71,7 +152,7 @@ app.get('/api/get-repo-info', async (c) => {
 
   // Try to get from cache first
   try {
-    const cached = await c.env.repo_index_kv.get(CACHE_KEY, { type: 'json' });
+    const cached = await c.env.repo_index_kv.get(CACHE_KEY, { type: 'json' }) as RepoInfoCache | null;
     if (cached && Array.isArray(cached.data) && Date.now() - cached.timestamp < CACHE_TTL) {
       return c.json(cached.data);
     }
@@ -80,34 +161,14 @@ app.get('/api/get-repo-info', async (c) => {
   }
 
   // Fetch from GitHub API
-  const rawReposData = await getAllRepos(env.REPO_INFO_TOKEN);
-  const filterRepos = rawReposData.map(item => {
-    const size_kb = Number(item.size) || 0;
-    const size_mb = Math.round((size_kb / 1024) * 100) / 100;
-    let risk: 'safe' | 'warn' | 'danger' = 'safe';
-    if (size_mb < 800) {
-      risk = 'safe';
-    } else if (size_mb <= 900) {
-      risk = 'warn';
-    } else {
-      risk = 'danger';
-    }
-    return {
-      name: item.name,
-      size: size_kb,
-      size_mb,
-      risk,
-      description: item.description,
-      html_url: item.html_url
-    };
-  });
+  const filterRepos = await getAllRepos(env.REPO_INFO_TOKEN);
 
   // Save to cache
   try {
     await c.env.repo_index_kv.put(CACHE_KEY, JSON.stringify({
       data: filterRepos,
       timestamp: Date.now()
-    }), { expirationTtl: 600 }); // 10 minutes expiration as backup
+    } as RepoInfoCache), { expirationTtl: 600 }); // 10 minutes expiration as backup
   } catch (e) {
     // Cache write failed, but we can still return the data
   }
@@ -127,10 +188,10 @@ app.get('/api/search', async (c) => {
 
   try {
 
-    let items: Array<{ name: string; repository?: string; branch?: string; path?: string; size?: number; github_url?: string; type?: 'file' | 'directory' }> = [];
+    let items: SearchItem[] = [];
 
 
-    const parseIndexJson = (fj: any, merged: any[]) => {
+    const parseIndexJson = (fj: IndexJson, merged: SearchItem[]) => {
       if (!fj || !Array.isArray(fj.branches)) return;
       const repoName = fj.repository || '';
       for (const br of fj.branches) {
@@ -158,7 +219,7 @@ app.get('/api/search', async (c) => {
 
 
     const cacheKey = (file === 'all' || !file) ? ALL_KEY : file;
-    const merged: any[] = [];
+    const merged: SearchItem[] = [];
     if (cacheKey === ALL_KEY) {
 
       let filesList: string[] = [];
@@ -170,10 +231,12 @@ app.get('/api/search', async (c) => {
       for (const fname of filesList) {
         try {
           if (!fname) continue;
-          const fj = await loadIndexByName(c, base, fname);
+          const fj = await loadIndexByName(c, fname);
           if (!fj) continue;
           parseIndexJson(fj, merged);
-        } catch (e) { }
+        } catch (e) {
+          console.error(`Failed to load index ${fname}:`, e);
+        }
       }
     } else if (cacheKey.includes(',')) {
 
@@ -183,9 +246,9 @@ app.get('/api/search', async (c) => {
         try {
           if (!fname || fname.includes('..') || fname.includes('/')) continue;
 
-          const fj = await loadIndexByName(c, base, fname);
+          const fj = await loadIndexByName(c, fname);
           if (!fj) continue;
-          const temp: any[] = [];
+          const temp: SearchItem[] = [];
           parseIndexJson(fj, temp);
 
           for (const it of temp) {
@@ -194,12 +257,14 @@ app.get('/api/search', async (c) => {
             seen.add(key);
             merged.push(it);
           }
-        } catch (e) { }
+        } catch (e) {
+          console.error(`Failed to load index ${fname}:`, e);
+        }
       }
     } else {
 
       if (cacheKey.includes('..') || cacheKey.includes('/')) return c.json({ error: 'invalid file' }, 400);
-      const fj = await loadIndexByName(c, base, cacheKey);
+      const fj = await loadIndexByName(c, cacheKey);
       if (!fj) return c.json({ error: 'not found' }, 404);
       parseIndexJson(fj, merged);
     }
@@ -208,7 +273,7 @@ app.get('/api/search', async (c) => {
 
     const mode = (c.req.query('mode') || 'path').trim();
 
-    const results: Array<any> = [];
+    const results: SearchResult[] = [];
     for (const it of items) {
       try {
 
@@ -236,10 +301,10 @@ app.get('/api/search', async (c) => {
 
         const size_bytes = Number(it.size) || 0;
         const size_mb = Math.round((size_bytes / 1024 / 1024) * 100) / 100;
-        const type = (it as any).type || (size_bytes > 0 ? 'file' : 'directory');
+        const type = it.type || (size_bytes > 0 ? 'file' : 'directory');
 
 
-        const result: any = {
+        const result: SearchResult = {
           name: it.name,
           repository: it.repository,
           branch: it.branch,
