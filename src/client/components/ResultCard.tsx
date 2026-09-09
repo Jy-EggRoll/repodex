@@ -17,10 +17,10 @@ export default function ResultCard({ href, title, titleHtml, subtitle, meta, bad
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="block h-full rounded-lg border border-kumo-line bg-kumo-elevated p-3 transition-shadow hover:shadow-sm"
+      className="block h-full rounded-lg border border-kumo-line bg-kumo-elevated p-3 transition-all hover:shadow-sm active:scale-[0.99]"
     >
       <div className="flex h-full w-full items-start justify-between gap-4">
-        <div className="flex-1 text-left">
+        <div className="min-w-0 flex-1 text-left">
           {titleHtml !== undefined ? (
             <div
               className="break-all text-lg font-semibold leading-tight text-kumo-strong"

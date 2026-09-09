@@ -22,11 +22,11 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-kumo-tint text-kumo-default">
+    <div className="min-h-screen bg-kumo-tint text-kumo-default antialiased">
       <div className="mx-auto max-w-5xl p-4 sm:p-6 xl:max-w-7xl">
-        <div className="mb-6 flex items-center justify-between gap-2 rounded-xl bg-kumo-base px-4 py-3 shadow-sm">
+        <div className="sticky top-4 z-10 mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-kumo-base px-4 py-3 shadow-sm">
           <button
-            className="px-2 text-xl font-semibold text-kumo-strong"
+            className="px-2 text-lg font-semibold text-kumo-strong sm:text-xl"
             onClick={() => setTab('repos')}
           >
             仓库信息

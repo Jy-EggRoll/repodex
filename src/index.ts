@@ -337,7 +337,7 @@ app.get('/api/search', async (c) => {
 
         let highlighted = '';
         for (let i = 0; i < chars.length; i++) {
-          if (markStarts.has(i)) highlighted += '<mark class="bg-yellow-200">';
+          if (markStarts.has(i)) highlighted += '<mark class="bg-kumo-warning-tint">';
           highlighted += chars[i];
           if (markEnds.has(i)) highlighted += '</mark>';
         }

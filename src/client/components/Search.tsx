@@ -162,7 +162,7 @@ export default function Search() {
           </div>
           <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
             <Dialog.Trigger render={(p) => <Button {...p} variant="outline">选择索引 <span className="ml-2 text-sm text-kumo-subtle">{countLabel}</span></Button>} />
-            <Dialog size="lg" className="p-8">
+            <Dialog size="lg" className="p-4 sm:p-6">
               <div className="mb-4 flex items-start justify-between gap-4">
                 <Dialog.Title className="text-xl font-semibold">选择索引</Dialog.Title>
                 <Dialog.Close
