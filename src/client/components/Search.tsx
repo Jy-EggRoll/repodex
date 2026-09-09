@@ -51,12 +51,10 @@ export default function Search() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // 输入框非受控：敲字只走 DOM，不触发 React 渲染，从根上消除输入卡顿
+  // 输入框非受控：敲字只走 DOM，不触发 React 渲染；搜索只由按钮/回车/切换手动触发
   const inputRef = useRef<HTMLInputElement>(null);
-  const composingRef = useRef(false);
-  // 请求串行合并：有请求在飞时只记下最新值，回来后立刻补发，无延迟、不吞键
-  const inflightRef = useRef(false);
-  const pendingRef = useRef<{ q: string; list: string[]; nameMode: boolean } | null>(null);
+  // 单调请求序号：过期响应直接丢弃，保证结果收敛到最后一次提交
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     async function loadIndexes() {
@@ -77,37 +75,30 @@ export default function Search() {
   async function doSearch(q: string, list: string[], nameMode: boolean) {
     const v = q.trim();
     if (!v) return;
-    inflightRef.current = true;
+    const id = ++requestIdRef.current;
     setError('');
     setErrorStatus(null);
     setSearching(true);
     try {
       const fileParam = list.length > 0 && list.length !== indexes.length ? list.join(',') : 'all';
       const data = await searchFiles(v, fileParam, nameMode ? 'name' : 'path');
+      if (id !== requestIdRef.current) return;
       setVisibleCount(PAGE_SIZE);
       setTotal(data.total);
       startTransition(() => {
         setResults(data.results);
       });
     } catch (e) {
+      if (id !== requestIdRef.current) return;
       setErrorStatus(e instanceof ApiError ? e.status : null);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      inflightRef.current = false;
-      setSearching(false);
-      const p = pendingRef.current;
-      pendingRef.current = null;
-      if (p && p.q.trim()) void doSearch(p.q, p.list, p.nameMode);
+      if (id === requestIdRef.current) setSearching(false);
     }
   }
 
   function searchFromInput(list = checked, nameMode = byName) {
-    const q = inputRef.current?.value ?? '';
-    if (inflightRef.current) {
-      pendingRef.current = { q, list, nameMode };
-      return;
-    }
-    void doSearch(q, list, nameMode);
+    void doSearch(inputRef.current?.value ?? '', list, nameMode);
   }
 
   function toggleOne(name: string, on: boolean) {
@@ -159,18 +150,7 @@ export default function Search() {
             <div className="min-w-0 flex-1">
               <Input
                 ref={inputRef}
-                placeholder="输入关键字，结果将动态展示"
-                onChange={() => {
-                  if (composingRef.current) return;
-                  searchFromInput();
-                }}
-                onCompositionStart={() => {
-                  composingRef.current = true;
-                }}
-                onCompositionEnd={() => {
-                  composingRef.current = false;
-                  searchFromInput();
-                }}
+                placeholder="输入关键字，回车或点击搜索"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') searchFromInput();
                 }}
