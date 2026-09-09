@@ -31,3 +31,7 @@ lerna-debug.log*
 
 # misc
 .DS_Store
+
+# auto-generated
+worker-configuration.d.ts
+pnpm-workspace.yaml
