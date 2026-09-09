@@ -34,3 +34,4 @@ lerna-debug.log*
 
 # auto-generated
 worker-configuration.d.ts
+pnpm-workspace.yaml
