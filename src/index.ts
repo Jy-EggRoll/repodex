@@ -12,7 +12,6 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-const indexCache = new Map<string, Array<{ name: string, repository?: string, branch?: string, path?: string, size?: number, github_url?: string, type?: 'file' | 'directory' }>>();
 const ALL_KEY = '__ALL_INDEX__';
 
 function basename(p: string) {
@@ -134,68 +133,53 @@ app.get('/api/search', async (c) => {
 
 
     const cacheKey = (file === 'all' || !file) ? ALL_KEY : file;
-    const cached = indexCache.get(cacheKey);
-    if (cached && cached.length > 0) {
-      items = cached;
-    } else {
-      const merged: any[] = [];
-      if (cacheKey === ALL_KEY) {
+    const merged: any[] = [];
+    if (cacheKey === ALL_KEY) {
 
-        let filesList: string[] = [];
+      let filesList: string[] = [];
+      try {
+        const kvList = await c.env.repo_index_kv.list({ limit: 1000 });
+        filesList = Array.isArray(kvList.keys) ? kvList.keys.map((k: any) => k.name) : [];
+      } catch (e) { filesList = []; }
+
+      for (const fname of filesList) {
         try {
-          const kvList = await c.env.repo_index_kv.list({ limit: 1000 });
-          filesList = Array.isArray(kvList.keys) ? kvList.keys.map((k: any) => k.name) : [];
-        } catch (e) { filesList = []; }
-
-        for (const fname of filesList) {
-          try {
-            if (!fname) continue;
-            const fj = await loadIndexByName(c, base, fname);
-            if (!fj) continue;
-            parseIndexJson(fj, merged);
-          } catch (e) { }
-        }
-      } else if (cacheKey.includes(',')) {
-
-        const fileList = cacheKey.split(',').map(s => s.trim()).filter(Boolean);
-        const seen = new Set<string>();
-        for (const fname of fileList) {
-          try {
-            if (!fname || fname.includes('..') || fname.includes('/')) continue;
-
-
-            let per = indexCache.get(fname);
-            if (!per) {
-              const fj = await loadIndexByName(c, base, fname);
-              if (!fj) continue;
-              const temp: any[] = [];
-              parseIndexJson(fj, temp);
-              per = temp;
-              indexCache.set(fname, per);
-            }
-
-            for (const it of per) {
-              const key = `${it.repository || ''}|${it.branch || ''}|${it.path || ''}|${it.type || ''}`;
-              if (seen.has(key)) continue;
-              seen.add(key);
-              merged.push(it);
-            }
-          } catch (e) { }
-        }
-      } else {
-
-        if (cacheKey.includes('..') || cacheKey.includes('/')) return c.json({ error: 'invalid file' }, 400);
-        const fj = await loadIndexByName(c, base, cacheKey);
-        if (!fj) return c.json({ error: 'not found' }, 404);
-        parseIndexJson(fj, merged);
-
-        indexCache.set(cacheKey, merged);
+          if (!fname) continue;
+          const fj = await loadIndexByName(c, base, fname);
+          if (!fj) continue;
+          parseIndexJson(fj, merged);
+        } catch (e) { }
       }
+    } else if (cacheKey.includes(',')) {
 
+      const fileList = cacheKey.split(',').map(s => s.trim()).filter(Boolean);
+      const seen = new Set<string>();
+      for (const fname of fileList) {
+        try {
+          if (!fname || fname.includes('..') || fname.includes('/')) continue;
 
-      indexCache.set(cacheKey, merged);
-      items = merged;
+          const fj = await loadIndexByName(c, base, fname);
+          if (!fj) continue;
+          const temp: any[] = [];
+          parseIndexJson(fj, temp);
+
+          for (const it of temp) {
+            const key = `${it.repository || ''}|${it.branch || ''}|${it.path || ''}|${it.type || ''}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            merged.push(it);
+          }
+        } catch (e) { }
+      }
+    } else {
+
+      if (cacheKey.includes('..') || cacheKey.includes('/')) return c.json({ error: 'invalid file' }, 400);
+      const fj = await loadIndexByName(c, base, cacheKey);
+      if (!fj) return c.json({ error: 'not found' }, 404);
+      parseIndexJson(fj, merged);
     }
+
+    items = merged;
 
     const mode = (c.req.query('mode') || 'path').trim();
 

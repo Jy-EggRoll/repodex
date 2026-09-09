@@ -112,14 +112,7 @@ async function loadIndexList() {
         allChk.addEventListener('change', (e) => {
             const checked = allChk.checked;
             document.querySelectorAll('#fileCheckboxes .index-checkbox').forEach((el) => { el.checked = checked; });
-        });
-
-        document.querySelectorAll('#fileCheckboxes .index-checkbox').forEach((el) => {
-            el.addEventListener('change', () => {
-
-                clearTimeout(searchTimer);
-                searchTimer = setTimeout(() => doSearch(), 150);
-            });
+            updateIndexSelectedCount();
         });
     } catch (e) {
 
@@ -188,7 +181,6 @@ async function doSearch() {
         document.getElementById('searchEmpty')?.classList.add('hidden');
         document.getElementById('searchResultsBox')?.classList.remove('hidden');
         const frag = document.createDocumentFragment();
-        const fragMobile = document.createDocumentFragment();
         for (const item of data) {
             const a = document.createElement('a');
 
@@ -223,13 +215,11 @@ async function doSearch() {
             `;
             a.classList.add('bg-base-200', 'bg-opacity-30');
             frag.appendChild(a);
-            const aMobile = a.cloneNode(true);
-            fragMobile.appendChild(aMobile);
         }
         const resultsDesktop = document.getElementById('results');
         if (resultsDesktop) { resultsDesktop.innerHTML = ''; resultsDesktop.appendChild(frag); }
         const resultsMobile = document.getElementById('resultsMobile');
-        if (resultsMobile) { resultsMobile.innerHTML = ''; resultsMobile.appendChild(fragMobile); }
+        if (resultsMobile) { resultsMobile.innerHTML = resultsDesktop?.innerHTML || ''; }
     } catch (e) {
         searchShowError(e.message || String(e));
     } finally {
