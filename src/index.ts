@@ -8,6 +8,9 @@ import { search as tseSearch } from 'text-search-engine';
 type Bindings = {
   public_assets: Fetcher;
   repo_index_kv: KVNamespace;
+  USER: string;
+  PSWD: string;
+  REPO_INFO_TOKEN: string;
 }
 
 interface IndexFile {
@@ -138,11 +141,13 @@ async function getAllRepos(token: string): Promise<RepoInfo[]> {
   return repos;
 }
 
+const secrets = env as unknown as Bindings;
+
 app.use(
   '*',
   basicAuth({
-    username: env.USER,
-    password: env.PSWD,
+    username: secrets.USER,
+    password: secrets.PSWD,
   })
 )
 
@@ -161,7 +166,7 @@ app.get('/api/get-repo-info', async (c) => {
   }
 
   // Fetch from GitHub API
-  const filterRepos = await getAllRepos(env.REPO_INFO_TOKEN);
+  const filterRepos = await getAllRepos((c.env as unknown as Bindings).REPO_INFO_TOKEN ?? secrets.REPO_INFO_TOKEN);
 
   // Save to cache
   try {

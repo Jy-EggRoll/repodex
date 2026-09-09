@@ -4,7 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-01-10",
   "assets": {
-    "directory": "./public/",
+    "directory": "./dist/",
     "binding": "public_assets",
     "run_worker_first": true
   },
