@@ -2,7 +2,6 @@ const loadBtn = document.getElementById('loadBtn');
 const repoLoading = document.getElementById('repoLoading');
 const repoError = document.getElementById('repoError');
 const repoResults = document.getElementById('repoResults');
-const repoList = null;
 const repoCards = document.getElementById('repoCards');
 
 function repoShowLoading() { repoLoading.classList.remove('hidden'); }

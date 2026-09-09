@@ -66,6 +66,20 @@ app.use(
 )
 
 app.get('/api/get-repo-info', async (c) => {
+  const CACHE_KEY = 'repo-info-cache';
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  // Try to get from cache first
+  try {
+    const cached = await c.env.repo_index_kv.get(CACHE_KEY, { type: 'json' });
+    if (cached && Array.isArray(cached.data) && Date.now() - cached.timestamp < CACHE_TTL) {
+      return c.json(cached.data);
+    }
+  } catch (e) {
+    // Cache miss or error, continue to fetch from GitHub
+  }
+
+  // Fetch from GitHub API
   const rawReposData = await getAllRepos(env.REPO_INFO_TOKEN);
   const filterRepos = rawReposData.map(item => {
     const size_kb = Number(item.size) || 0;
@@ -87,6 +101,17 @@ app.get('/api/get-repo-info', async (c) => {
       html_url: item.html_url
     };
   });
+
+  // Save to cache
+  try {
+    await c.env.repo_index_kv.put(CACHE_KEY, JSON.stringify({
+      data: filterRepos,
+      timestamp: Date.now()
+    }), { expirationTtl: 600 }); // 10 minutes expiration as backup
+  } catch (e) {
+    // Cache write failed, but we can still return the data
+  }
+
   return c.json(filterRepos)
 });
 
