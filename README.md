@@ -1,8 +1,8 @@
 ---
 title: 项目介绍-repodex
-description: 基于 GitHub Actions、Cloudflare Workers 和传统前端技术（当前，后期有向框架迁移的准备），实现了一套跨仓库、跨分支的多维度模糊搜索系统，以提升用户在 GitHub 上的文件检索效率。
+description: 基于 GitHub Actions、Cloudflare Workers 和 React + Vite + Kumo 前端，实现了一套跨仓库、跨分支的多维度模糊搜索系统，以提升用户在 GitHub 上的文件检索效率。
 date: 2026-01-16
-lastmod: 2026-06-26
+lastmod: 2026-09-09
 image: 
 categories:
     - 项目
@@ -25,7 +25,7 @@ weight: 1
 
 此外，对于中文用户，这些文件中不乏中文文件名的内容，GitHub 也不支持拼音模糊搜索，进一步限制了用户的检索效率。
 
-为此，我开发了本项目，基于 GitHub Actions、Cloudflare Workers 和传统前端技术（当前，后期有向框架迁移的准备），实现了一套**跨仓库、跨分支的多维度模糊搜索系统**，以提升用户在 GitHub 上的文件检索效率。
+为此，我开发了本项目，基于 GitHub Actions、Cloudflare Workers 和 React + Vite + Kumo 前端，实现了一套**跨仓库、跨分支的多维度模糊搜索系统**，以提升用户在 GitHub 上的文件检索效率。
 
 本项目以**易配置、零成本**的思想开发，在正常使用情况下，**远不可能**达到 GitHub Actions 和 Cloudflare 的免费额度。您可以放心地按照本文流程部署项目，无须担心产生任何成本。
 
@@ -51,7 +51,7 @@ weight: 1
 
 - 不论是仓库还是文件，都支持点击直达 GitHub。
 - 文件默认检测所有分支（事实上，这是由索引决定的）
-- 主题切换（当前仅支持手动，后续维护）
+- 主题切换（浅色 / 深色自动适配 Kumo 语义 token，偏好持久化到 localStorage）
 
 ## 项目优点速览
 
@@ -83,7 +83,7 @@ weight: 1
 
 请连接到 GitHub，如需授权，请放心授权。连接后选择自己 Fork 的项目即可。
 
-选择后直接部署即可，不需要改动任何默认值。
+在构建设置中，构建命令填写 `pnpm build`（依赖安装由 Cloudflare 自动执行），部署命令保持 `npx wrangler deploy --minify`。前端构建产物输出到 `dist/`，已在 `wrangler.jsonc` 中配置，无需额外指定输出目录。
 
 ### 创建 Workers KV
 
@@ -351,4 +351,5 @@ jobs:
 - Cloudflare，提供 Workers、Git 集成、KV 等核心功能。
 - <https://github.com/cjinhuo/text-search-engine> 一个相当成熟的搜索器，兼容性好，性能高，支持拼音、模糊搜索。
 - <https://github.com/honojs> Hono 框架，为我的项目提供在 Cloudflare 上最快的速度和严密的安全认证。
-- <https://daisyui.com/> daisyUI，为我的前端提供预定义的、美观的组件库，大幅减少前端维护难度。
+- <https://kumo-ui.com> Kumo，Cloudflare 官方 React 组件库，为前端提供一致的 UI 与无障碍支持。
+- <https://react.dev> React、<https://vite.dev> Vite 与 <https://tailwindcss.com> Tailwind CSS v4，构成前端构建与样式基础。
