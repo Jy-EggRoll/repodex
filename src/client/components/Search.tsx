@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input, Switch, Checkbox, Badge, Dialog, Banner, Loader, Empty } from '@cloudflare/kumo';
 import { X } from '@phosphor-icons/react';
 import { fetchIndexList, searchFiles, type SearchResult } from '../api';
+import ResultCard from './ResultCard';
+
+const PAGE_SIZE = 100;
 
 function sizeText(item: SearchResult) {
   if (typeof item.size === 'number' && !Number.isNaN(item.size)) {
@@ -19,8 +22,23 @@ function titleHtml(item: SearchResult) {
   return item.name || '';
 }
 
+const ResultRow = memo(function ResultRow({ item }: { item: SearchResult }) {
+  return (
+    <ResultCard
+      href={item.github_url || '#'}
+      titleHtml={titleHtml(item)}
+      subtitle={`${item.repository || ''} / ${item.branch || ''} — ${item.path || ''}`}
+      meta={sizeText(item)}
+      badge={
+        <Badge variant={item.type === 'file' ? 'info' : 'primary'}>
+          {item.type === 'file' ? '文件' : '文件夹'}
+        </Badge>
+      }
+    />
+  );
+});
+
 export default function Search() {
-  const [query, setQuery] = useState('');
   const [byName, setByName] = useState(false);
   const [indexes, setIndexes] = useState<string[]>([]);
   const [checked, setChecked] = useState<string[]>([]);
@@ -28,59 +46,73 @@ export default function Search() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
   const [results, setResults] = useState<SearchResult[] | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const timer = useRef<number>(0);
 
-  async function loadIndexes() {
-    setLoadingIndexes(true);
-    try {
-      const arr = await fetchIndexList();
-      setIndexes(arr);
-      setChecked((prev) => (prev.length === 0 ? arr : prev));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoadingIndexes(false);
-    }
-  }
+  // 输入框非受控：敲字只走 DOM，不触发 React 渲染，从根上消除输入卡顿
+  const inputRef = useRef<HTMLInputElement>(null);
+  const composingRef = useRef(false);
+  // 单调请求序号：过期响应直接丢弃，保证结果收敛到最后一次输入
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
+    async function loadIndexes() {
+      setLoadingIndexes(true);
+      try {
+        const arr = await fetchIndexList();
+        setIndexes(arr);
+        setChecked((prev) => (prev.length === 0 ? arr : prev));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoadingIndexes(false);
+      }
+    }
     loadIndexes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function doSearch(q = query, list = checked) {
+  async function doSearch(q: string, list: string[], nameMode: boolean) {
     const v = q.trim();
     if (!v) return;
+    const id = ++requestIdRef.current;
     setError('');
     setSearching(true);
     try {
       const fileParam = list.length > 0 && list.length !== indexes.length ? list.join(',') : 'all';
-      const data = await searchFiles(v, fileParam, byName ? 'name' : 'path');
-      setResults(data);
+      const data = await searchFiles(v, fileParam, nameMode ? 'name' : 'path');
+      if (id !== requestIdRef.current) return;
+      setVisibleCount(PAGE_SIZE);
+      startTransition(() => {
+        setResults(data);
+      });
     } catch (e) {
+      if (id !== requestIdRef.current) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setSearching(false);
+      if (id === requestIdRef.current) setSearching(false);
     }
   }
 
-  function scheduleSearch(q = query, list = checked, ms = 300) {
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => doSearch(q, list), ms);
+  function searchFromInput(list = checked, nameMode = byName) {
+    doSearch(inputRef.current?.value ?? '', list, nameMode);
   }
 
   function toggleOne(name: string, on: boolean) {
     const next = on ? [...checked, name] : checked.filter((v) => v !== name);
     setChecked(next);
-    scheduleSearch(query, next, 150);
+    searchFromInput(next);
   }
 
   function toggleAll(on: boolean) {
     const next = on ? indexes : [];
     setChecked(next);
-    scheduleSearch(query, next, 150);
+    searchFromInput(next);
   }
+
+  const visibleResults = useMemo(
+    () => results?.slice(0, visibleCount) ?? null,
+    [results, visibleCount],
+  );
 
   const allChecked = indexes.length > 0 && checked.length === indexes.length;
   const countLabel = loadingIndexes
@@ -101,7 +133,7 @@ export default function Search() {
           onClick={() => {
             const next = !byName;
             setByName(next);
-            scheduleSearch(query, checked, 150);
+            searchFromInput(checked, next);
           }}
         />
         <span className="text-xs text-kumo-subtle">（默认按路径搜索）</span>
@@ -113,19 +145,25 @@ export default function Search() {
           <div className="flex w-full flex-1 gap-2">
             <div className="min-w-0 flex-1">
               <Input
+                ref={inputRef}
                 placeholder="输入关键字，结果将动态展示"
-                value={query}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setQuery(v);
-                  if (v.trim()) scheduleSearch(v, checked, 300);
+                onChange={() => {
+                  if (composingRef.current) return;
+                  searchFromInput();
+                }}
+                onCompositionStart={() => {
+                  composingRef.current = true;
+                }}
+                onCompositionEnd={() => {
+                  composingRef.current = false;
+                  searchFromInput();
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') doSearch();
+                  if (e.key === 'Enter') searchFromInput();
                 }}
               />
             </div>
-            <Button variant="primary" loading={searching} disabled={searching} onClick={() => doSearch()}>
+            <Button variant="primary" loading={searching} onClick={() => searchFromInput()}>
               搜索
             </Button>
           </div>
@@ -173,40 +211,24 @@ export default function Search() {
         {results !== null && results.length === 0 && !searching && (
           <Empty title="未找到匹配" description="换个关键字或调整索引选择试试" />
         )}
-        {results !== null && results.length > 0 && (
+        {visibleResults !== null && visibleResults.length > 0 && results !== null && (
           <div>
             <h2 className="mb-2 text-lg font-semibold text-kumo-strong">匹配结果（{results.length}）</h2>
-            <div className="space-y-3">
-              {results.map((item, i) => (
-                <a
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              {visibleResults.map((item, i) => (
+                <ResultRow
                   key={`${item.repository}-${item.branch}-${item.path}-${item.type}-${i}`}
-                  href={item.github_url || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full rounded-lg bg-kumo-base p-3 transition-colors hover:shadow-sm"
-                >
-                  <div className="flex w-full items-start justify-between gap-4">
-                    <div className="flex-1 text-left">
-                      <div
-                        className="break-all text-lg font-semibold leading-tight text-kumo-strong"
-                        dangerouslySetInnerHTML={{ __html: titleHtml(item) }}
-                      />
-                      <div className="mt-1 break-all break-words whitespace-pre-wrap text-xs text-kumo-subtle">
-                        {item.repository || ''} / {item.branch || ''} — {item.path || ''}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end justify-start">
-                      <div className="text-sm text-kumo-subtle">{sizeText(item)}</div>
-                      <div className="mt-2">
-                        <Badge variant={item.type === 'file' ? 'info' : 'primary'}>
-                          {item.type === 'file' ? '文件' : '文件夹'}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </a>
+                  item={item}
+                />
               ))}
             </div>
+            {visibleCount < results.length && (
+              <div className="mt-4 flex justify-center">
+                <Button variant="secondary" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
+                  加载更多（已显示 {visibleResults.length} / 共 {results.length}）
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

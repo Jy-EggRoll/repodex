@@ -23,7 +23,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-kumo-tint text-kumo-default">
-      <div className="mx-auto max-w-5xl p-4 sm:p-6">
+      <div className="mx-auto max-w-5xl p-4 sm:p-6 xl:max-w-7xl">
         <div className="mb-6 flex items-center justify-between gap-2 rounded-xl bg-kumo-base px-4 py-3 shadow-sm">
           <button
             className="px-2 text-xl font-semibold text-kumo-strong"
