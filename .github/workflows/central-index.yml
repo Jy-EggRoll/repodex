@@ -1,8 +1,9 @@
 name: Central Repository Index
 
 on:
+  push: # 任意分支推送都跑一次（本流不写回仓库，无自循环风险）
   schedule:
-    - cron: "0 * * * *" # 每小时整点增量同步（无变化的仓库零 clone 直接跳过）
+    - cron: "0 * * * *" # 每小时整点增量同步（无变化的仓库直接跳过）
   workflow_dispatch: # 手动触发，可指定单个仓库补跑、可 dry-run
     inputs:
       repos:
