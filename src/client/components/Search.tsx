@@ -258,6 +258,9 @@ export default function Search() {
       )}
 
       <div className="mt-6">
+        {results === null && !searching && !error && (
+          <Empty title="输入关键词开始搜索" description="回车或点击搜索按钮，可按名称或路径匹配" />
+        )}
         {results !== null && results.length === 0 && !searching && (
           <Empty title="未找到匹配" description="换个关键字或调整索引选择试试" />
         )}

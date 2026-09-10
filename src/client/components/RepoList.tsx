@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Badge, Banner, Loader, Empty } from "@cloudflare/kumo";
 import { fetchRepos, type RepoInfo } from "../api";
 import { formatRepoSize } from "../format";
@@ -29,13 +29,19 @@ export default function RepoList() {
     }
   }
 
+  // 首屏自动加载（服务端 5 分钟缓存，成本可忽略），按钮保留作刷新
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <section>
       <h1 className="text-kumo-strong mb-4 text-2xl font-bold">GitHub 仓库列表</h1>
       <div className="flex min-h-[56px] flex-col items-start gap-3 sm:flex-row sm:items-center">
         <div className="flex w-full items-center gap-3 sm:w-auto">
           <Button variant="primary" loading={loading} disabled={loading} onClick={load}>
-            点击加载仓库数据
+            刷新仓库数据
           </Button>
           {loading && (
             <span className="flex items-center gap-2">
