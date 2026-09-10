@@ -1,25 +1,35 @@
 import { useEffect, useState } from "react";
 import { Tabs, Button } from "@cloudflare/kumo";
-import { Sun, Moon } from "@phosphor-icons/react";
+import { Sun, Moon, Desktop } from "@phosphor-icons/react";
 import RepoList from "./components/RepoList";
 import Search from "./components/Search";
-import { loadTheme, applyTheme, type ThemeMode } from "./theme";
+import { loadSetting, applyTheme, subscribeSystem, type ThemeSetting } from "./theme";
+
+const THEME_ORDER: ThemeSetting[] = ["auto", "light", "dark"];
+const THEME_META: Record<ThemeSetting, { icon: typeof Sun; label: string }> = {
+  auto: { icon: Desktop, label: "跟随系统" },
+  light: { icon: Sun, label: "浅色" },
+  dark: { icon: Moon, label: "深色" },
+};
 
 export default function App() {
   const [tab, setTab] = useState("repos");
-  const [mode, setMode] = useState<ThemeMode>("light");
+  const [setting, setSetting] = useState<ThemeSetting>("auto");
 
   useEffect(() => {
-    const m = loadTheme();
-    setMode(m);
-    applyTheme(m);
+    const saved = loadSetting();
+    setSetting(saved);
+    applyTheme(saved);
+    return subscribeSystem(() => applyTheme(loadSetting()));
   }, []);
 
-  function toggleMode() {
-    const next: ThemeMode = mode === "light" ? "dark" : "light";
-    setMode(next);
+  function cycleTheme() {
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(setting) + 1) % THEME_ORDER.length];
+    setSetting(next);
     applyTheme(next);
   }
+
+  const ThemeIcon = THEME_META[setting].icon;
 
   return (
     <div className="bg-kumo-tint text-kumo-default min-h-screen antialiased">
@@ -30,7 +40,7 @@ export default function App() {
             className="text-kumo-strong px-2 text-lg font-semibold sm:text-xl"
             onClick={() => setTab("repos")}
           >
-            仓库信息
+            RepoDex
           </button>
           <div className="flex items-center gap-2">
             <Tabs
@@ -46,9 +56,10 @@ export default function App() {
             <Button
               variant="ghost"
               shape="square"
-              aria-label="切换主题"
-              icon={mode === "light" ? <Moon /> : <Sun />}
-              onClick={toggleMode}
+              aria-label={`切换主题（当前：${THEME_META[setting].label}）`}
+              title={THEME_META[setting].label}
+              icon={<ThemeIcon />}
+              onClick={cycleTheme}
             />
           </div>
         </div>
@@ -56,6 +67,10 @@ export default function App() {
         <div className="bg-kumo-base rounded-xl p-4 shadow-md sm:p-6">
           {tab === "repos" ? <RepoList /> : <Search />}
         </div>
+
+        <footer className="text-kumo-subtle mt-6 pb-2 text-center text-xs">
+          Powered by Cloudflare Workers · Kumo
+        </footer>
       </div>
     </div>
   );
