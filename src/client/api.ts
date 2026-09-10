@@ -45,6 +45,7 @@ export class ApiError extends Error {
 export interface SearchResponse {
   results: SearchResult[];
   total: number;
+  truncated: boolean;
   fileCount: number;
   dirCount: number;
   indexCount: number;

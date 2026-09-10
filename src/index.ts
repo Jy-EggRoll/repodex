@@ -81,6 +81,8 @@ const app = new Hono<{ Bindings: Bindings }>();
 const ALL_KEY = "__ALL_INDEX__";
 // 单次搜索最多返回条数：只截断高亮构建 + 序列化，total 仍返回全量计数
 const MAX_RESULTS = 100;
+// 匹配收集上限：满即停，total 标约数；给短查询的内存/CPU 上保险丝
+const SCORE_CAP = 5000;
 // 并行分批大小：I/O 重叠，峰值内存有界；100 为实测值，若 503 回归则降回
 const BATCH_SIZE = 100;
 
@@ -324,10 +326,12 @@ app.get("/api/search", async (c) => {
 
     const mode = (c.req.query("mode") || "path").trim();
 
-    // 第一阶段：全量只记下标和分数（不存 ranges 坐标），顺手计文件/文件夹数
+    // 第一阶段：全量只记下标和分数（不存 ranges 坐标），顺手计文件/文件夹数；
+    // 满 SCORE_CAP 即停，total 标约数，给短查询的内存/CPU 上保险丝
     const scored: Array<{ idx: number; score: number }> = [];
     let fileCount = 0;
     let dirCount = 0;
+    let truncated = false;
     for (let idx = 0; idx < items.length; idx++) {
       const it = items[idx];
       try {
@@ -343,6 +347,10 @@ app.get("/api/search", async (c) => {
         if (it.type === "directory") dirCount += 1;
         else fileCount += 1;
         scored.push({ idx, score });
+        if (scored.length >= SCORE_CAP) {
+          truncated = true;
+          break;
+        }
       } catch (se) {}
     }
     const tSearch = Date.now();
@@ -391,13 +399,14 @@ app.get("/api/search", async (c) => {
 
     const tookMs = Date.now() - t0;
     console.log(
-      `[search] q=${q} file=${file} mode=${mode} total=${scored.length} ` +
+      `[search] q=${q} file=${file} mode=${mode} total=${scored.length}${truncated ? "+" : ""} ` +
         `tookMs=${tookMs} loadMs=${tLoad - t0} searchMs=${tSearch - tLoad} ` +
         `indexes=${indexCount} items=${itemsTotal} fail=${loadFailCount}`,
     );
     return c.json({
       results,
       total: scored.length,
+      truncated,
       fileCount,
       dirCount,
       indexCount,
