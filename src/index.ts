@@ -5,6 +5,7 @@ import { prettyJSON } from "hono/pretty-json";
 import { Octokit } from "octokit";
 import { search as tseSearch } from "text-search-engine";
 import { chunk } from "./batch";
+import { compareRank, rankKeyFromRanges, type RankKey } from "./rank";
 
 type Bindings = {
   public_assets: Fetcher;
@@ -326,9 +327,9 @@ app.get("/api/search", async (c) => {
 
     const mode = (c.req.query("mode") || "path").trim();
 
-    // 第一阶段：全量只记下标和分数（不存 ranges 坐标），顺手计文件/文件夹数；
+    // 第一阶段：全量只记排名键（下标+4 个数，不存 ranges 坐标），顺手计文件/文件夹数；
     // 满 SCORE_CAP 即停，total 标约数，给短查询的内存/CPU 上保险丝
-    const scored: Array<{ idx: number; score: number }> = [];
+    const scored: Array<{ idx: number; key: RankKey }> = [];
     let fileCount = 0;
     let dirCount = 0;
     let truncated = false;
@@ -341,12 +342,12 @@ app.get("/api/search", async (c) => {
         const ranges = tseSearch(target, q);
         if (!ranges) continue;
 
-        let score = 0;
-        for (const r of ranges) score += r[1] - r[0] + 1;
+        const key = rankKeyFromRanges(ranges, Array.from(target).length);
+        if (!key) continue;
 
         if (it.type === "directory") dirCount += 1;
         else fileCount += 1;
-        scored.push({ idx, score });
+        scored.push({ idx, key });
         if (scored.length >= SCORE_CAP) {
           truncated = true;
           break;
@@ -356,25 +357,23 @@ app.get("/api/search", async (c) => {
     const tSearch = Date.now();
 
     // 第二阶段：排序截断后，只给入选条目重跑匹配拿 ranges 拼高亮
-    scored.sort((a, b) => b.score - a.score);
-    const results: SearchResult[] = scored.slice(0, MAX_RESULTS).map(({ idx, score }) => {
+    scored.sort((a, b) => compareRank(a.key, b.key));
+    const results: SearchResult[] = scored.slice(0, MAX_RESULTS).map(({ idx, key }) => {
       const it = items[idx];
       const target = mode === "name" ? it.name || "" : it.path || it.name || "";
-      const ranges = tseSearch(target, q) ?? [];
+      const ranges = [...(tseSearch(target, q) ?? [])].sort((a, b) => a[0] - b[0]);
       const chars = Array.from(target);
-      const markStarts = new Set<number>();
-      const markEnds = new Set<number>();
-      for (const r of ranges) {
-        markStarts.add(r[0]);
-        markEnds.add(r[1]);
-      }
 
       let highlighted = "";
-      for (let i = 0; i < chars.length; i++) {
-        if (markStarts.has(i)) highlighted += "<mark>";
-        highlighted += chars[i];
-        if (markEnds.has(i)) highlighted += "</mark>";
+      let pos = 0;
+      for (const [sRaw, eRaw] of ranges) {
+        const s = Math.max(sRaw, pos);
+        if (eRaw < pos) continue;
+        highlighted +=
+          chars.slice(pos, s).join("") + "<mark>" + chars.slice(s, eRaw + 1).join("") + "</mark>";
+        pos = eRaw + 1;
       }
+      highlighted += chars.slice(pos).join("");
 
       const size_bytes = Number(it.size) || 0;
       const size_mb = Math.round((size_bytes / 1024 / 1024) * 100) / 100;
@@ -390,7 +389,7 @@ app.get("/api/search", async (c) => {
         type,
         github_url: it.github_url,
         ranges,
-        score,
+        score: key.matched,
       };
       if (mode === "name") result.highlightedName = highlighted;
       else result.highlightedPath = highlighted;
