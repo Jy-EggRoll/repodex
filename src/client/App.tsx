@@ -1,16 +1,32 @@
 import { useEffect, useState } from "react";
-import { Tabs, Button } from "@cloudflare/kumo";
+import { Tabs, Button, DropdownMenu } from "@cloudflare/kumo";
 import { Sun, Moon, Desktop } from "@phosphor-icons/react";
 import RepoList from "./components/RepoList";
 import Search from "./components/Search";
 import { loadSetting, applyTheme, subscribeSystem, type ThemeSetting } from "./theme";
 
-const THEME_ORDER: ThemeSetting[] = ["auto", "light", "dark"];
 const THEME_META: Record<ThemeSetting, { icon: typeof Sun; label: string }> = {
   auto: { icon: Desktop, label: "跟随系统" },
   light: { icon: Sun, label: "浅色" },
   dark: { icon: Moon, label: "深色" },
 };
+
+function ThemeMenuItem({
+  value,
+  current,
+  onSelect,
+}: {
+  value: ThemeSetting;
+  current: ThemeSetting;
+  onSelect: (v: ThemeSetting) => void;
+}) {
+  const { icon: Icon, label } = THEME_META[value];
+  return (
+    <DropdownMenu.Item icon={<Icon />} selected={value === current} onClick={() => onSelect(value)}>
+      {label}
+    </DropdownMenu.Item>
+  );
+}
 
 export default function App() {
   const [tab, setTab] = useState("repos");
@@ -23,8 +39,7 @@ export default function App() {
     return subscribeSystem(() => applyTheme(loadSetting()));
   }, []);
 
-  function cycleTheme() {
-    const next = THEME_ORDER[(THEME_ORDER.indexOf(setting) + 1) % THEME_ORDER.length];
+  function selectTheme(next: ThemeSetting) {
     setSetting(next);
     applyTheme(next);
   }
@@ -53,14 +68,25 @@ export default function App() {
                 { value: "search", label: "文件搜索" },
               ]}
             />
-            <Button
-              variant="ghost"
-              shape="square"
-              aria-label={`切换主题（当前：${THEME_META[setting].label}）`}
-              title={THEME_META[setting].label}
-              icon={<ThemeIcon />}
-              onClick={cycleTheme}
-            />
+            <DropdownMenu>
+              <DropdownMenu.Trigger
+                render={(p) => (
+                  <Button
+                    {...p}
+                    variant="ghost"
+                    shape="square"
+                    aria-label={`切换主题（当前：${THEME_META[setting].label}）`}
+                    title={THEME_META[setting].label}
+                    icon={<ThemeIcon />}
+                  />
+                )}
+              />
+              <DropdownMenu.Content>
+                {(Object.keys(THEME_META) as ThemeSetting[]).map((v) => (
+                  <ThemeMenuItem key={v} value={v} current={setting} onSelect={selectTheme} />
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu>
           </div>
         </div>
 
