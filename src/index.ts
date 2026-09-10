@@ -83,12 +83,15 @@ const ITEMS_CACHE_TTL = 120;
 // 单次搜索最多返回条数：只截断高亮构建 + 序列化，total 仍返回全量计数
 const MAX_RESULTS = 300;
 
-async function getCachedItems(cacheKey: string, loader: () => Promise<SearchItem[]>): Promise<SearchItem[]> {
+async function getCachedItems(
+  cacheKey: string,
+  loader: () => Promise<SearchItem[]>,
+): Promise<{ items: SearchItem[]; cached: boolean }> {
   const url = `https://repodex-items.local/${encodeURIComponent(cacheKey)}`;
   const cache = await caches.open("repodex-items");
   try {
     const hit = await cache.match(url);
-    if (hit) return (await hit.json()) as SearchItem[];
+    if (hit) return { items: (await hit.json()) as SearchItem[], cached: true };
   } catch {
     // miss：继续走 KV 加载
   }
@@ -103,7 +106,21 @@ async function getCachedItems(cacheKey: string, loader: () => Promise<SearchItem
   } catch {
     // 缓存写失败不影响返回
   }
-  return items;
+  return { items, cached: false };
+}
+
+/** 并行加载多个索引：I/O 重叠，单 key 失败只记日志跳过。 */
+async function loadMany(c: any, names: string[]): Promise<IndexJson[]> {
+  const settled = await Promise.allSettled(names.map((n) => loadIndexByName(c, n)));
+  const out: IndexJson[] = [];
+  settled.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      if (r.value) out.push(r.value);
+    } else {
+      console.error(`Failed to load index ${names[i]}:`, r.reason);
+    }
+  });
+  return out;
 }
 
 function basename(p: string) {
@@ -227,6 +244,7 @@ app.get("/api/search", async (c) => {
   if (!c.env.repo_index_kv) return c.json({ error: "repo_index_kv binding is not available" }, 500);
 
   try {
+    const t0 = Date.now();
     let items: SearchItem[] = [];
 
     const parseIndexJson = (fj: IndexJson, merged: SearchItem[]) => {
@@ -284,7 +302,7 @@ app.get("/api/search", async (c) => {
     if (isSingle && (cacheKey.includes("..") || cacheKey.includes("/"))) {
       return c.json({ error: "invalid file" }, 400);
     }
-    items = await getCachedItems(cacheKey, async () => {
+    const loaded = await getCachedItems(cacheKey, async () => {
       const merged: SearchItem[] = [];
       if (cacheKey === ALL_KEY) {
         let filesList: string[] = [];
@@ -295,40 +313,25 @@ app.get("/api/search", async (c) => {
           filesList = [];
         }
 
-        for (const fname of filesList) {
-          try {
-            // 只加载仓库索引，跳过 repo-info-cache 等其它 key
-            if (!fname || !fname.endsWith("-index")) continue;
-            const fj = await loadIndexByName(c, fname);
-            if (!fj) continue;
-            parseIndexJson(fj, merged);
-          } catch (e) {
-            console.error(`Failed to load index ${fname}:`, e);
-          }
-        }
+        // 只加载仓库索引，跳过 repo-info-cache 等其它 key
+        const names = filesList.filter((fname) => fname && fname.endsWith("-index"));
+        for (const fj of await loadMany(c, names)) parseIndexJson(fj, merged);
       } else if (cacheKey.includes(",")) {
         const fileList = cacheKey
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean);
         const seen = new Set<string>();
-        for (const fname of fileList) {
-          try {
-            if (!fname || fname.includes("..") || fname.includes("/")) continue;
+        const names = fileList.filter((fname) => fname && !fname.includes("..") && !fname.includes("/"));
+        for (const fj of await loadMany(c, names)) {
+          const temp: SearchItem[] = [];
+          parseIndexJson(fj, temp);
 
-            const fj = await loadIndexByName(c, fname);
-            if (!fj) continue;
-            const temp: SearchItem[] = [];
-            parseIndexJson(fj, temp);
-
-            for (const it of temp) {
-              const key = `${it.repository || ""}|${it.branch || ""}|${it.path || ""}|${it.type || ""}`;
-              if (seen.has(key)) continue;
-              seen.add(key);
-              merged.push(it);
-            }
-          } catch (e) {
-            console.error(`Failed to load index ${fname}:`, e);
+          for (const it of temp) {
+            const key = `${it.repository || ""}|${it.branch || ""}|${it.path || ""}|${it.type || ""}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            merged.push(it);
           }
         }
       } else {
@@ -339,6 +342,8 @@ app.get("/api/search", async (c) => {
 
       return merged;
     });
+    items = loaded.items;
+    const tLoad = Date.now();
     if (isSingle && items.length === 0) {
       // 区分“索引不存在”与“索引为空”：空结果时复查一次 KV
       const fj = await loadIndexByName(c, cacheKey);
@@ -347,7 +352,10 @@ app.get("/api/search", async (c) => {
 
     const mode = (c.req.query("mode") || "path").trim();
 
-    const results: SearchResult[] = [];
+    // 第一阶段：全量只算分（不拼高亮），顺手计文件/文件夹数
+    const scored: Array<{ it: SearchItem; ranges: any; score: number }> = [];
+    let fileCount = 0;
+    let dirCount = 0;
     for (const it of items) {
       try {
         const target = mode === "name" ? it.name || "" : it.path || it.name || "";
@@ -359,46 +367,63 @@ app.get("/api/search", async (c) => {
         let score = 0;
         for (const r of ranges) score += r[1] - r[0] + 1;
 
-        const chars = Array.from(target);
-        const markStarts = new Set<number>();
-        const markEnds = new Set<number>();
-        for (const r of ranges) {
-          markStarts.add(r[0]);
-          markEnds.add(r[1]);
-        }
-
-        let highlighted = "";
-        for (let i = 0; i < chars.length; i++) {
-          if (markStarts.has(i)) highlighted += "<mark>";
-          highlighted += chars[i];
-          if (markEnds.has(i)) highlighted += "</mark>";
-        }
-
-        const size_bytes = Number(it.size) || 0;
-        const size_mb = Math.round((size_bytes / 1024 / 1024) * 100) / 100;
-        const type = it.type || (size_bytes > 0 ? "file" : "directory");
-
-        const result: SearchResult = {
-          name: it.name,
-          repository: it.repository,
-          branch: it.branch,
-          path: it.path,
-          size: it.size,
-          size_mb,
-          type,
-          github_url: it.github_url,
-          ranges,
-          score,
-        };
-        if (mode === "name") result.highlightedName = highlighted;
-        else result.highlightedPath = highlighted;
-
-        results.push(result);
+        if (it.type === "directory") dirCount += 1;
+        else fileCount += 1;
+        scored.push({ it, ranges, score });
       } catch (se) {}
     }
+    const tSearch = Date.now();
 
-    results.sort((a, b) => b.score - a.score);
-    return c.json({ results: results.slice(0, MAX_RESULTS), total: results.length });
+    // 第二阶段：排序截断后，只给入选条目拼高亮
+    scored.sort((a, b) => b.score - a.score);
+    const results: SearchResult[] = scored.slice(0, MAX_RESULTS).map(({ it, ranges, score }) => {
+      const target = mode === "name" ? it.name || "" : it.path || it.name || "";
+      const chars = Array.from(target);
+      const markStarts = new Set<number>();
+      const markEnds = new Set<number>();
+      for (const r of ranges) {
+        markStarts.add(r[0]);
+        markEnds.add(r[1]);
+      }
+
+      let highlighted = "";
+      for (let i = 0; i < chars.length; i++) {
+        if (markStarts.has(i)) highlighted += "<mark>";
+        highlighted += chars[i];
+        if (markEnds.has(i)) highlighted += "</mark>";
+      }
+
+      const size_bytes = Number(it.size) || 0;
+      const size_mb = Math.round((size_bytes / 1024 / 1024) * 100) / 100;
+      const type = it.type || (size_bytes > 0 ? "file" : "directory");
+
+      const result: SearchResult = {
+        name: it.name,
+        repository: it.repository,
+        branch: it.branch,
+        path: it.path,
+        size: it.size,
+        size_mb,
+        type,
+        github_url: it.github_url,
+        ranges,
+        score,
+      };
+      if (mode === "name") result.highlightedName = highlighted;
+      else result.highlightedPath = highlighted;
+      return result;
+    });
+
+    return c.json({
+      results,
+      total: scored.length,
+      fileCount,
+      dirCount,
+      tookMs: Date.now() - t0,
+      loadMs: tLoad - t0,
+      searchMs: tSearch - tLoad,
+      cached: loaded.cached,
+    });
   } catch (err) {
     return c.json({ error: "failed to search", details: String(err) }, 500);
   }

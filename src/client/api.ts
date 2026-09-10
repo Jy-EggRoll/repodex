@@ -45,6 +45,12 @@ export class ApiError extends Error {
 export interface SearchResponse {
   results: SearchResult[];
   total: number;
+  fileCount: number;
+  dirCount: number;
+  tookMs: number;
+  loadMs: number;
+  searchMs: number;
+  cached: boolean;
 }
 
 /** 选中索引转 file 查询参数：全选或未选都走 all。 */

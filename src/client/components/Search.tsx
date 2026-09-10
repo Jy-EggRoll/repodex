@@ -1,6 +1,6 @@
 import { memo, startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Input, Switch, Checkbox, Badge, Dialog, Banner, Loader, Empty } from "@cloudflare/kumo";
-import { X } from "@phosphor-icons/react";
+import { Bug, X } from "@phosphor-icons/react";
 import { ApiError, buildFileParam, fetchIndexList, searchFiles, type SearchResult } from "../api";
 import { formatFileSize } from "../format";
 import ResultCard from "./ResultCard";
@@ -39,8 +39,36 @@ export default function Search() {
   const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [total, setTotal] = useState(0);
+  const [fileCount, setFileCount] = useState(0);
+  const [dirCount, setDirCount] = useState(0);
+  const [perf, setPerf] = useState<{
+    tookMs: number;
+    loadMs: number;
+    searchMs: number;
+    cached: boolean;
+    roundTripMs: number;
+  } | null>(null);
+  const [debug, setDebug] = useState(() => {
+    try {
+      return localStorage.getItem("repodex-debug") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  function toggleDebug() {
+    setDebug((d) => {
+      try {
+        if (d) localStorage.removeItem("repodex-debug");
+        else localStorage.setItem("repodex-debug", "1");
+      } catch {
+        // ignore
+      }
+      return !d;
+    });
+  }
 
   // 输入框非受控：敲字只走 DOM，不触发 React 渲染；搜索只由按钮/回车/切换手动触发
   const inputRef = useRef<HTMLInputElement>(null);
@@ -91,10 +119,20 @@ export default function Search() {
     setErrorStatus(null);
     setSearching(true);
     try {
+      const tStart = performance.now();
       const data = await searchFiles(v, buildFileParam(list, indexes.length), nameMode ? "name" : "path");
       if (id !== requestIdRef.current) return;
       setVisibleCount(PAGE_SIZE);
       setTotal(data.total);
+      setFileCount(data.fileCount);
+      setDirCount(data.dirCount);
+      setPerf({
+        tookMs: data.tookMs,
+        loadMs: data.loadMs,
+        searchMs: data.searchMs,
+        cached: data.cached,
+        roundTripMs: Math.round(performance.now() - tStart),
+      });
       startTransition(() => {
         setResults(data.results);
       });
@@ -194,6 +232,15 @@ export default function Search() {
             <Button variant="primary" loading={searching} onClick={() => searchFromInput()}>
               搜索
             </Button>
+            <Button
+              variant={debug ? "primary" : "ghost"}
+              shape="square"
+              aria-label="调试模式"
+              aria-pressed={debug}
+              title="调试模式：显示详细性能信息"
+              icon={<Bug />}
+              onClick={toggleDebug}
+            />
           </div>
           <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
             <Dialog.Trigger
@@ -294,7 +341,20 @@ export default function Search() {
         )}
         {visibleResults !== null && visibleResults.length > 0 && results !== null && (
           <div>
-            <h2 className="text-kumo-strong mb-2 text-lg font-semibold">匹配结果（共 {total} 条）</h2>
+            <h2 className="text-kumo-strong mb-2 text-lg font-semibold">
+              匹配结果（共 {total} 条 · {fileCount} 个文件 / {dirCount} 个文件夹）
+            </h2>
+            {debug && perf && (
+              <div className="border-kumo-line bg-kumo-base mb-3 rounded-lg border p-3 font-mono text-xs">
+                <div className="text-kumo-subtle">
+                  服务端 {perf.tookMs}ms（取数 {perf.loadMs} / 匹配 {perf.searchMs}）
+                </div>
+                <div className="text-kumo-subtle mt-1">
+                  网络来回 {perf.roundTripMs}ms · 索引缓存 {perf.cached ? "命中" : "未命中"} · 返回{" "}
+                  {results.length}/{total}
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
               {visibleResults.map((item, i) => (
                 <ResultRow
