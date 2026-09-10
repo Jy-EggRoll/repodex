@@ -25,6 +25,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Typegen
+        run: pnpm cf-typegen
+
       - name: Format check
         run: pnpm format:check
 
