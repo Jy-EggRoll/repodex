@@ -194,6 +194,7 @@ export default function Search() {
           size="sm"
           label="按名称搜索"
           checked={byName}
+          disabled={searching}
           onClick={() => {
             const next = !byName;
             setByName(next);
@@ -212,7 +213,7 @@ export default function Search() {
                 ref={inputRef}
                 placeholder="输入关键字，回车或点击搜索（按 / 聚焦）"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") searchFromInput();
+                  if (e.key === "Enter" && !searching) searchFromInput();
                 }}
               />
             </div>
@@ -224,7 +225,12 @@ export default function Search() {
               icon={<X />}
               onClick={clearInput}
             />
-            <Button variant="primary" loading={searching} onClick={() => searchFromInput()}>
+            <Button
+              variant="primary"
+              loading={searching}
+              disabled={searching}
+              onClick={() => searchFromInput()}
+            >
               搜索
             </Button>
             <Button
@@ -264,13 +270,13 @@ export default function Search() {
                   />
                 </div>
                 <div className="flex shrink-0 gap-2">
-                  <Button variant="secondary" size="sm" onClick={selectAll}>
+                  <Button variant="secondary" size="sm" disabled={searching} onClick={selectAll}>
                     全选
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={invertSelection}>
+                  <Button variant="secondary" size="sm" disabled={searching} onClick={invertSelection}>
                     反选
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={clearAll}>
+                  <Button variant="secondary" size="sm" disabled={searching} onClick={clearAll}>
                     清除
                   </Button>
                 </div>
@@ -285,6 +291,7 @@ export default function Search() {
                         <Checkbox
                           label={<span className="text-sm break-all">{fname}</span>}
                           checked={checked.includes(fname)}
+                          disabled={searching}
                           onCheckedChange={(v) => toggleOne(fname, v === true)}
                         />
                       </div>
@@ -314,7 +321,7 @@ export default function Search() {
             description={error}
           />
           <div className="mt-2">
-            <Button variant="secondary" size="sm" onClick={() => searchFromInput()}>
+            <Button variant="secondary" size="sm" disabled={searching} onClick={() => searchFromInput()}>
               重试
             </Button>
           </div>

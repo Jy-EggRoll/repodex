@@ -2,7 +2,6 @@ import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { basicAuth } from "hono/basic-auth";
 import { prettyJSON } from "hono/pretty-json";
-import { Octokit } from "octokit";
 import { search as tseSearch } from "text-search-engine";
 import { chunk } from "./batch";
 import { compareRank, rankKeyFromRanges, type RankKey } from "./rank";
@@ -116,6 +115,8 @@ async function loadIndexByName(c: any, name: string): Promise<IndexJson | null> 
 }
 
 async function getAllRepos(token: string): Promise<RepoInfo[]> {
+  // 按需加载：octokit 只给仓库列表页用，不污染搜索路径冷启动
+  const { Octokit } = await import("octokit");
   const octokit = new Octokit({
     auth: token,
     request: { timeout: 10000 },
