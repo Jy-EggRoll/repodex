@@ -39,3 +39,6 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Build demo
+        run: pnpm exec vite build --mode demo --base=/repodex/ --outDir dist-demo

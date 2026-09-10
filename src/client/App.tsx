@@ -46,8 +46,15 @@ export default function App() {
 
   const ThemeIcon = THEME_META[setting].icon;
 
+  const isDemo = import.meta.env.VITE_DEMO === "1";
+
   return (
     <div className="bg-kumo-tint text-kumo-default min-h-screen antialiased">
+      {isDemo && (
+        <div className="bg-kumo-info-tint text-kumo-strong px-4 py-2 text-center text-sm">
+          演示模式：数据为虚构样例，搜索逻辑与正式版一致
+        </div>
+      )}
       <div className="mx-auto max-w-5xl p-4 sm:p-6 xl:max-w-7xl">
         {/* 不加 z-index：Kumo 弹框靠 body 末尾 portal 压住页面，有 z-index 反而会盖住弹框 */}
         <div className="bg-kumo-base sticky top-4 mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 shadow-sm">

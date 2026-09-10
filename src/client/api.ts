@@ -22,13 +22,18 @@ export interface SearchResult {
   highlightedName?: string;
 }
 
+// Demo 构建开关：VITE_DEMO=1 时走本地合成数据（动态加载，生产包零残留）
+const DEMO = import.meta.env.VITE_DEMO === "1";
+
 export async function fetchRepos(): Promise<RepoInfo[]> {
+  if (DEMO) return (await import("./demo-search")).listRepos();
   const res = await fetch("/api/get-repo-info");
   if (!res.ok) throw new Error(res.statusText || `请求失败 ${res.status}`);
   return res.json();
 }
 
 export async function fetchIndexList(): Promise<string[]> {
+  if (DEMO) return (await import("./demo-search")).listIndexes();
   const res = await fetch("/api/repo-list");
   if (!res.ok) throw new Error(`请求失败 ${res.status}`);
   return res.json();
@@ -72,6 +77,7 @@ export async function searchFiles(
   limit = 100,
   offset = 0,
 ): Promise<SearchResponse> {
+  if (DEMO) return (await import("./demo-search")).searchIndexes(q, fileParam, mode, limit, offset);
   const res = await fetch(
     `/api/search?q=${encodeURIComponent(q)}&file=${encodeURIComponent(fileParam)}&mode=${mode}&limit=${limit}&offset=${offset}`,
   );

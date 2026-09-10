@@ -4,6 +4,7 @@ import { basicAuth } from "hono/basic-auth";
 import { prettyJSON } from "hono/pretty-json";
 import { search as tseSearch } from "text-search-engine";
 import { chunk } from "./batch";
+import { buildHighlighted } from "./highlight";
 import { compareRank, rankKeyFromRanges, type RankKey } from "./rank";
 
 type Bindings = {
@@ -366,19 +367,8 @@ app.get("/api/search", async (c) => {
     const results: SearchResult[] = page.map(({ idx, key }) => {
       const it = items[idx];
       const target = mode === "name" ? it.name || "" : it.path || it.name || "";
-      const ranges = [...(tseSearch(target, q) ?? [])].sort((a, b) => a[0] - b[0]);
-      const chars = Array.from(target);
-
-      let highlighted = "";
-      let pos = 0;
-      for (const [sRaw, eRaw] of ranges) {
-        const s = Math.max(sRaw, pos);
-        if (eRaw < pos) continue;
-        highlighted +=
-          chars.slice(pos, s).join("") + "<mark>" + chars.slice(s, eRaw + 1).join("") + "</mark>";
-        pos = eRaw + 1;
-      }
-      highlighted += chars.slice(pos).join("");
+      const ranges = tseSearch(target, q) ?? [];
+      const highlighted = buildHighlighted(target, ranges);
 
       const size_bytes = Number(it.size) || 0;
       const size_mb = Math.round((size_bytes / 1024 / 1024) * 100) / 100;

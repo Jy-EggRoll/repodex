@@ -1,3 +1,5 @@
 repos-blocklist.txt
 pnpm-lock.yaml
 dist/
+dist-demo/
+.env.demo

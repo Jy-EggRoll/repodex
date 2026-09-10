@@ -19,6 +19,8 @@ weight: 1
 
 命名：RepositoryIndex——仓库索引聚合。
 
+- 在线试用（演示数据为虚构样例，搜索逻辑与正式版一致）：[RepoDex Demo](https://jy-eggroll.github.io/repodex/)
+
 - 博客文章链接（和 README 完全相同）：[项目介绍-RepoDex](https://eggroll.pages.dev/p/项目介绍-repodex/)
 
 ## 为什么要开发此项目
