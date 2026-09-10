@@ -81,8 +81,8 @@ const app = new Hono<{ Bindings: Bindings }>();
 const ALL_KEY = "__ALL_INDEX__";
 // 单次搜索最多返回条数：只截断高亮构建 + 序列化，total 仍返回全量计数
 const MAX_RESULTS = 300;
-// 并行分批大小：I/O 重叠但内存峰值有界（无上限版已证伪，不再尝试）
-const BATCH_SIZE = 20;
+// 并行分批大小：I/O 重叠，峰值内存有界；100 为实测值，若 503 回归则降回
+const BATCH_SIZE = 100;
 
 function basename(p: string) {
   if (!p) return "";
@@ -92,9 +92,9 @@ function basename(p: string) {
 }
 
 app.use(
+  // 不加 force：默认仅 ?pretty 时美化，正常流量保持压缩，省传输与序列化
   prettyJSON({
     space: 4,
-    force: true,
   }),
 );
 
