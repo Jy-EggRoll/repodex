@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
 interface ResultCardProps {
   href: string;
@@ -17,24 +17,24 @@ export default function ResultCard({ href, title, titleHtml, subtitle, meta, bad
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="block h-full rounded-lg border border-kumo-line bg-kumo-elevated p-3 transition-all hover:shadow-sm active:scale-[0.99]"
+      className="border-kumo-line bg-kumo-elevated block h-full rounded-lg border p-3 transition-all hover:shadow-sm active:scale-[0.99]"
     >
       <div className="flex h-full w-full items-start justify-between gap-4">
         <div className="min-w-0 flex-1 text-left">
           {titleHtml !== undefined ? (
             <div
-              className="break-all text-lg font-semibold leading-tight text-kumo-strong"
+              className="text-kumo-strong text-lg leading-tight font-semibold break-all"
               dangerouslySetInnerHTML={{ __html: titleHtml }}
             />
           ) : (
-            <div className="break-all text-lg font-semibold leading-tight text-kumo-strong">{title}</div>
+            <div className="text-kumo-strong text-lg leading-tight font-semibold break-all">{title}</div>
           )}
-          <div className="mt-1 break-all break-words whitespace-pre-wrap text-xs text-kumo-subtle">
+          <div className="text-kumo-subtle mt-1 text-xs break-words break-all whitespace-pre-wrap">
             {subtitle}
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end justify-start">
-          <div className="text-sm text-kumo-subtle">{meta}</div>
+          <div className="text-kumo-subtle text-sm">{meta}</div>
           <div className="mt-2">{badge}</div>
         </div>
       </div>

@@ -1,37 +1,28 @@
-import { memo, startTransition, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Input, Switch, Checkbox, Badge, Dialog, Banner, Loader, Empty } from '@cloudflare/kumo';
-import { X } from '@phosphor-icons/react';
-import { ApiError, fetchIndexList, searchFiles, type SearchResult } from '../api';
-import ResultCard from './ResultCard';
+import { memo, startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { Button, Input, Switch, Checkbox, Badge, Dialog, Banner, Loader, Empty } from "@cloudflare/kumo";
+import { X } from "@phosphor-icons/react";
+import { ApiError, buildFileParam, fetchIndexList, searchFiles, type SearchResult } from "../api";
+import { formatFileSize } from "../format";
+import ResultCard from "./ResultCard";
 
 const PAGE_SIZE = 100;
 
-function sizeText(item: SearchResult) {
-  if (typeof item.size === 'number' && !Number.isNaN(item.size)) {
-    return `${Math.round((item.size / 1024 / 1024) * 100) / 100} MB`;
-  }
-  if (typeof item.size_mb === 'number' && !Number.isNaN(item.size_mb)) {
-    return `${item.size_mb} MB`;
-  }
-  return '-';
-}
-
 function titleHtml(item: SearchResult) {
-  if (item.highlightedPath && item.highlightedPath !== 'undefined') return item.highlightedPath;
-  if (item.highlightedName && item.highlightedName !== 'undefined') return item.highlightedName;
-  return item.name || '';
+  if (item.highlightedPath && item.highlightedPath !== "undefined") return item.highlightedPath;
+  if (item.highlightedName && item.highlightedName !== "undefined") return item.highlightedName;
+  return item.name || "";
 }
 
 const ResultRow = memo(function ResultRow({ item }: { item: SearchResult }) {
   return (
     <ResultCard
-      href={item.github_url || '#'}
+      href={item.github_url || "#"}
       titleHtml={titleHtml(item)}
-      subtitle={`${item.repository || ''} / ${item.branch || ''} — ${item.path || ''}`}
-      meta={sizeText(item)}
+      subtitle={`${item.repository || ""} / ${item.branch || ""} — ${item.path || ""}`}
+      meta={formatFileSize(item)}
       badge={
-        <Badge variant={item.type === 'file' ? 'info' : 'primary'}>
-          {item.type === 'file' ? '文件' : '文件夹'}
+        <Badge variant={item.type === "file" ? "info" : "primary"}>
+          {item.type === "file" ? "文件" : "文件夹"}
         </Badge>
       }
     />
@@ -44,7 +35,7 @@ export default function Search() {
   const [checked, setChecked] = useState<string[]>([]);
   const [loadingIndexes, setLoadingIndexes] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -76,12 +67,11 @@ export default function Search() {
     const v = q.trim();
     if (!v) return;
     const id = ++requestIdRef.current;
-    setError('');
+    setError("");
     setErrorStatus(null);
     setSearching(true);
     try {
-      const fileParam = list.length > 0 && list.length !== indexes.length ? list.join(',') : 'all';
-      const data = await searchFiles(v, fileParam, nameMode ? 'name' : 'path');
+      const data = await searchFiles(v, buildFileParam(list, indexes.length), nameMode ? "name" : "path");
       if (id !== requestIdRef.current) return;
       setVisibleCount(PAGE_SIZE);
       setTotal(data.total);
@@ -98,7 +88,7 @@ export default function Search() {
   }
 
   function searchFromInput(list = checked, nameMode = byName) {
-    void doSearch(inputRef.current?.value ?? '', list, nameMode);
+    void doSearch(inputRef.current?.value ?? "", list, nameMode);
   }
 
   function toggleOne(name: string, on: boolean) {
@@ -107,12 +97,9 @@ export default function Search() {
     searchFromInput(next);
   }
 
-  const visibleResults = useMemo(
-    () => results?.slice(0, visibleCount) ?? null,
-    [results, visibleCount],
-  );
+  const visibleResults = useMemo(() => results?.slice(0, visibleCount) ?? null, [results, visibleCount]);
 
-  const [indexFilter, setIndexFilter] = useState('');
+  const [indexFilter, setIndexFilter] = useState("");
   const filteredIndexes = useMemo(() => {
     const kw = indexFilter.trim().toLowerCase();
     return kw ? indexes.filter((n) => n.toLowerCase().includes(kw)) : indexes;
@@ -140,14 +127,14 @@ export default function Search() {
   }
 
   const countLabel = loadingIndexes
-    ? '（请求索引中）'
+    ? "（请求索引中）"
     : checked.length === 0
-      ? '（未选择）'
+      ? "（未选择）"
       : `（${checked.length} 已选）`;
 
   return (
     <section>
-      <h1 className="mb-4 text-2xl font-bold text-kumo-strong">仓库文件搜索</h1>
+      <h1 className="text-kumo-strong mb-4 text-2xl font-bold">仓库文件搜索</h1>
 
       <div className="flex min-h-[56px] items-center gap-4">
         <Switch
@@ -160,11 +147,11 @@ export default function Search() {
             searchFromInput(checked, next);
           }}
         />
-        <span className="text-xs text-kumo-subtle">（默认按路径搜索）</span>
+        <span className="text-kumo-subtle text-xs">（默认按路径搜索）</span>
       </div>
 
       <div className="mt-2">
-        <label className="mb-2 block font-medium text-kumo-strong">搜索（默认在所有索引中搜索）</label>
+        <label className="text-kumo-strong mb-2 block font-medium">搜索（默认在所有索引中搜索）</label>
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
           <div className="flex w-full flex-1 gap-2">
             <div className="min-w-0 flex-1">
@@ -172,7 +159,7 @@ export default function Search() {
                 ref={inputRef}
                 placeholder="输入关键字，回车或点击搜索"
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') searchFromInput();
+                  if (e.key === "Enter") searchFromInput();
                 }}
               />
             </div>
@@ -181,13 +168,21 @@ export default function Search() {
             </Button>
           </div>
           <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
-            <Dialog.Trigger render={(p) => <Button {...p} variant="outline">选择索引 <span className="ml-2 text-sm text-kumo-subtle">{countLabel}</span></Button>} />
+            <Dialog.Trigger
+              render={(p) => (
+                <Button {...p} variant="outline">
+                  选择索引 <span className="text-kumo-subtle ml-2 text-sm">{countLabel}</span>
+                </Button>
+              )}
+            />
             <Dialog size="xl" className="p-4 sm:p-6">
               <div className="mb-4 flex items-start justify-between gap-4">
                 <Dialog.Title className="text-xl font-semibold">选择索引</Dialog.Title>
                 <Dialog.Close
                   aria-label="Close"
-                  render={(props) => <Button {...props} variant="secondary" shape="square" icon={<X />} aria-label="Close" />}
+                  render={(props) => (
+                    <Button {...props} variant="secondary" shape="square" icon={<X />} aria-label="Close" />
+                  )}
                 />
               </div>
               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -199,20 +194,26 @@ export default function Search() {
                   />
                 </div>
                 <div className="flex shrink-0 gap-2">
-                  <Button variant="secondary" size="sm" onClick={selectAll}>全选</Button>
-                  <Button variant="secondary" size="sm" onClick={invertSelection}>反选</Button>
-                  <Button variant="secondary" size="sm" onClick={clearAll}>清除</Button>
+                  <Button variant="secondary" size="sm" onClick={selectAll}>
+                    全选
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={invertSelection}>
+                    反选
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={clearAll}>
+                    清除
+                  </Button>
                 </div>
               </div>
-              <div className="max-h-[60vh] overflow-auto rounded-lg bg-kumo-base p-2">
+              <div className="bg-kumo-base max-h-[60vh] overflow-auto rounded-lg p-2">
                 {filteredIndexes.length === 0 ? (
-                  <div className="p-3 text-sm text-kumo-subtle">无匹配索引</div>
+                  <div className="text-kumo-subtle p-3 text-sm">无匹配索引</div>
                 ) : (
                   <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
                     {filteredIndexes.map((fname) => (
                       <div key={fname}>
                         <Checkbox
-                          label={<span className="break-all text-sm">{fname}</span>}
+                          label={<span className="text-sm break-all">{fname}</span>}
                           checked={checked.includes(fname)}
                           onCheckedChange={(v) => toggleOne(fname, v === true)}
                         />
@@ -222,7 +223,13 @@ export default function Search() {
                 )}
               </div>
               <div className="mt-8 flex justify-end gap-2">
-                <Dialog.Close render={(props) => <Button variant="primary" {...props}>完成</Button>} />
+                <Dialog.Close
+                  render={(props) => (
+                    <Button variant="primary" {...props}>
+                      完成
+                    </Button>
+                  )}
+                />
               </div>
             </Dialog>
           </Dialog.Root>
@@ -234,11 +241,7 @@ export default function Search() {
           <Banner
             variant="error"
             title="搜索失败"
-            description={
-              errorStatus === 503
-                ? '服务端计算超时，请缩短关键词、只选单个索引后重试。'
-                : error
-            }
+            description={errorStatus === 503 ? "服务端计算超时，请缩短关键词、只选单个索引后重试。" : error}
           />
           <div className="mt-2">
             <Button variant="secondary" size="sm" onClick={() => searchFromInput()}>
@@ -250,7 +253,7 @@ export default function Search() {
       {searching && (
         <div className="mt-4 flex items-center gap-2">
           <Loader size="sm" />
-          <span className="text-sm text-kumo-subtle">搜索中</span>
+          <span className="text-kumo-subtle text-sm">搜索中</span>
         </div>
       )}
 
@@ -260,7 +263,7 @@ export default function Search() {
         )}
         {visibleResults !== null && visibleResults.length > 0 && results !== null && (
           <div>
-            <h2 className="mb-2 text-lg font-semibold text-kumo-strong">匹配结果（共 {total} 条）</h2>
+            <h2 className="text-kumo-strong mb-2 text-lg font-semibold">匹配结果（共 {total} 条）</h2>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
               {visibleResults.map((item, i) => (
                 <ResultRow

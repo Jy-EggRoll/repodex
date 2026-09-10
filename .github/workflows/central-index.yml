@@ -2,8 +2,8 @@ name: Central Repository Index
 
 on:
   schedule:
-    - cron: "0 * * * *"  # 每小时整点增量同步（无变化的仓库零 clone 直接跳过）
-  workflow_dispatch:  # 手动触发，可指定单个仓库补跑、可 dry-run
+    - cron: "0 * * * *" # 每小时整点增量同步（无变化的仓库零 clone 直接跳过）
+  workflow_dispatch: # 手动触发，可指定单个仓库补跑、可 dry-run
     inputs:
       repos:
         description: "仅处理这些仓库（逗号分隔 owner/repo，留空则全部）"
@@ -26,11 +26,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
       - name: Sync
         env:
           REPOS_PAT: ${{ secrets.REPOS_PAT }}
@@ -39,4 +34,4 @@ jobs:
           CF_NAMESPACE_ID: ${{ secrets.CF_NAMESPACE_ID }}
           REPOS_ONLY: ${{ inputs.repos }}
           DRY_RUN: ${{ inputs.dry_run == 'true' && '1' || '' }}
-        run: python scripts/generate_index.py 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+        run: node scripts/generate_index.mjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"

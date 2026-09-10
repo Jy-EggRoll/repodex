@@ -7,7 +7,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "pnpm build && wrangler deploy --minify",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
     "@cloudflare/kumo": "^2.13.2",
@@ -23,9 +28,12 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
+    "vitest": "^5.0.0",
     "wrangler": "^4.87.0"
   }
 }
