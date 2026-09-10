@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Sync
         env:
@@ -35,4 +35,5 @@ jobs:
           CF_NAMESPACE_ID: ${{ secrets.CF_NAMESPACE_ID }}
           REPOS_ONLY: ${{ inputs.repos }}
           DRY_RUN: ${{ inputs.dry_run == 'true' && '1' || '' }}
-        run: node scripts/generate_index.mjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+        # stdout（纯净 markdown）进 Summary，stderr（彩色动态）只进控制台日志
+        run: node scripts/generate_index.mjs > "$GITHUB_STEP_SUMMARY"

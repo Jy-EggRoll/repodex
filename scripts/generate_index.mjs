@@ -12,6 +12,14 @@ const GH_API = "https://api.github.com";
 const CF_API = "https://api.cloudflare.com/client/v4";
 const SHA_TABLE_KEY = "__meta-sha-table";
 
+// 终端颜色：只走 stderr（控制台日志），stdout 专供 Summary 纯净 markdown
+const paint = (code) => (s) => (process.env.NO_COLOR === "1" ? s : `\x1b[${code}m${s}\x1b[0m`);
+const green = paint(32);
+const gray = paint(90);
+const yellow = paint(33);
+const red = paint(31);
+const cyan = paint(36);
+
 function required(name) {
   const value = (process.env[name] ?? "").trim();
   if (!value) {
@@ -130,6 +138,11 @@ export function needsUpdate(stored, current) {
   return bKeys.some((k) => a[k] !== current[k]);
 }
 
+/** 只有 SHA 一致且索引 key 真实存在，才算可跳过（防静默漏索引）。 */
+export function shouldSkip(stored, current, keyExists) {
+  return !needsUpdate(stored, current) && keyExists;
+}
+
 /** 文件树条目转索引分支：与老格式完全一致。 */
 export function buildBranch(branchName, entries) {
   const files = [];
@@ -175,15 +188,22 @@ async function main() {
   const storedTable = (await cfKvGet(cfAccount, cfNamespace, cfToken, SHA_TABLE_KEY)) ?? {};
   const shaTable = typeof storedTable === "object" && storedTable !== null ? storedTable : {};
 
+  // 日志分流：动态走 stderr（控制台彩色），报表走 stdout（Summary 纯净 markdown）
+  const say = (s) => console.error(s);
+  const startedAt = Date.now();
+  const counts = { updated: 0, skipped: 0, warned: 0, pruned: 0 };
   const summary = [];
   const discoveredKeys = new Set();
+  const existingKeys = new Set(await cfKvList(cfAccount, cfNamespace, cfToken));
 
   const repos = await ghRequest("/user/repos?affiliation=owner&sort=full_name", ghToken);
   for (const repo of repos) {
     const fullName = repo.full_name ?? "";
     if (!fullName || repo.archived || repo.disabled) continue;
     if (blocklist.has(fullName)) {
+      say(gray(`→ ${fullName} 黑名单跳过`));
       summary.push([fullName, "黑名单跳过"]);
+      counts.skipped += 1;
       continue;
     }
     if (only.size > 0 && !only.has(fullName)) continue;
@@ -195,26 +215,30 @@ async function main() {
       branchList.filter((b) => b.name && b.commit).map((b) => [b.name, b.commit.sha]),
     );
     if (Object.keys(current).length === 0) {
+      say(gray(`→ ${fullName} 无分支跳过`));
       summary.push([fullName, "无分支跳过"]);
+      counts.skipped += 1;
       continue;
     }
-    if (!needsUpdate(shaTable[fullName], current)) {
+    if (shouldSkip(shaTable[fullName], current, existingKeys.has(`${shortName}-index`))) {
+      say(gray(`→ ${fullName} 无变化跳过`));
       summary.push([fullName, "无变化跳过"]);
+      counts.skipped += 1;
       continue;
     }
 
-    console.log(`Indexing ${fullName} (${Object.keys(current).length} branches)...`);
+    say(`Indexing ${fullName} (${Object.keys(current).length} branches)...`);
     const branchesData = [];
     let skipped = false;
     for (const [branchName, headSha] of Object.entries(current).sort()) {
       const tree = await ghRequest(`/repos/${fullName}/git/trees/${headSha}?recursive=1`, ghToken);
       if (typeof tree !== "object" || tree === null || Array.isArray(tree)) {
-        console.log(`  WARN ${fullName}@${branchName}: 文件树返回异常，本轮跳过`);
+        say(yellow(`  WARN ${fullName}@${branchName}: 文件树返回异常，本轮跳过`));
         skipped = true;
         break;
       }
       if (tree.truncated) {
-        console.log(`  WARN ${fullName}@${branchName}: 文件树超限，本轮跳过（需手动处理）`);
+        say(yellow(`  WARN ${fullName}@${branchName}: 文件树超限，本轮跳过（需手动处理）`));
         skipped = true;
         break;
       }
@@ -222,27 +246,41 @@ async function main() {
     }
     if (skipped) {
       summary.push([fullName, "文件树超限跳过"]);
+      counts.warned += 1;
       continue;
     }
     const index = { repository: fullName, repository_short_name: shortName, branches: branchesData };
     await cfKvPut(cfAccount, cfNamespace, cfToken, `${shortName}-index`, index, dryRun);
     const nFiles = branchesData.reduce((n, b) => n + b.files.length, 0);
     if (!dryRun) shaTable[fullName] = current;
+    say(green(`✓ ${fullName} 已更新（${nFiles} 文件）`));
     summary.push([fullName, `已更新（${nFiles} 文件）`]);
+    counts.updated += 1;
   }
 
   // 清理僵尸 key：-index 后缀但已不在本次发现集合里（repo-info-cache 等不动）
-  for (const key of await cfKvList(cfAccount, cfNamespace, cfToken)) {
+  for (const key of existingKeys) {
     if (key.endsWith("-index") && !discoveredKeys.has(key)) {
-      console.log(`Pruning stale key ${key}...`);
+      say(yellow(`Pruning stale key ${key}...`));
       await cfKvDelete(cfAccount, cfNamespace, cfToken, key, dryRun);
       summary.push([key, "僵尸索引已清理"]);
+      counts.pruned += 1;
     }
   }
 
   if (!dryRun) await cfKvPut(cfAccount, cfNamespace, cfToken, SHA_TABLE_KEY, shaTable, dryRun);
 
-  console.log("\n## 索引同步结果\n");
+  const seconds = Math.round((Date.now() - startedAt) / 1000);
+  say(
+    green(`${counts.updated} 更新`) +
+      gray(` · ${counts.skipped} 跳过`) +
+      yellow(` · ${counts.warned} 警告 · ${counts.pruned} 清理`) +
+      cyan(` · 用时 ${seconds}s`),
+  );
+  console.log("## 索引同步结果\n");
+  console.log(
+    `${counts.updated} 更新 · ${counts.skipped} 跳过 · ${counts.warned} 警告 · ${counts.pruned} 清理 · 用时 ${seconds}s\n`,
+  );
   console.log("| 仓库 | 状态 |");
   console.log("| --- | --- |");
   for (const [name, status] of summary) console.log(`| ${name} | ${status} |`);

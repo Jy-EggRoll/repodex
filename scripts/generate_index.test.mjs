@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBranch, needsUpdate, parseBlocklist } from "./generate_index.mjs";
+import { buildBranch, needsUpdate, parseBlocklist, shouldSkip } from "./generate_index.mjs";
 
 describe("parseBlocklist", () => {
   it("忽略注释、空行与首尾空格", () => {
@@ -20,6 +20,20 @@ describe("needsUpdate", () => {
     expect(needsUpdate({ main: "aaa" }, { main: "bbb" })).toBe(true);
     expect(needsUpdate({ main: "aaa" }, { main: "aaa", dev: "ccc" })).toBe(true);
     expect(needsUpdate(undefined, { main: "aaa" })).toBe(true);
+  });
+});
+
+describe("shouldSkip", () => {
+  it("SHA 一致且 key 存在才跳过", () => {
+    expect(shouldSkip({ main: "aaa" }, { main: "aaa" }, true)).toBe(true);
+  });
+
+  it("SHA 一致但 key 缺失也要重建（防静默漏索引）", () => {
+    expect(shouldSkip({ main: "aaa" }, { main: "aaa" }, false)).toBe(false);
+  });
+
+  it("SHA 变化则重建", () => {
+    expect(shouldSkip({ main: "aaa" }, { main: "bbb" }, true)).toBe(false);
   });
 });
 

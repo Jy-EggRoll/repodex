@@ -1,6 +1,7 @@
 {
   "name": "repodex",
   "type": "module",
+  "packageManager": "pnpm@11.12.0",
   "scripts": {
     "dev": "wrangler dev",
     "dev:client": "vite",
