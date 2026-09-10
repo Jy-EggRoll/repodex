@@ -6,12 +6,19 @@ describe("buildDemoCorpus", () => {
     expect(buildDemoCorpus(DEMO_SEED)).toEqual(buildDemoCorpus(DEMO_SEED));
   });
 
-  it("三仓库多分支，有文件有目录", () => {
+  it("五仓库多分支，有文件有目录", () => {
     const repos = buildDemoCorpus();
-    expect(repos).toHaveLength(3);
+    expect(repos).toHaveLength(5);
+    expect(repos.map((r) => r.repository_short_name)).toEqual([
+      "demo-tiny",
+      "demo-code",
+      "demo-docs",
+      "demo-media",
+      "demo-large",
+    ]);
     const files = repos.flatMap((r) => r.branches.flatMap((b) => b.files));
     const dirs = repos.flatMap((r) => r.branches.flatMap((b) => b.directories));
-    expect(files.length).toBeGreaterThan(200);
+    expect(files.length).toBeGreaterThan(500);
     expect(dirs.length).toBeGreaterThan(0);
     expect(files[0]).toHaveProperty("name");
     expect(files[0].path.startsWith("./")).toBe(true);

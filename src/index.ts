@@ -6,6 +6,7 @@ import { search as tseSearch } from "text-search-engine";
 import { chunk } from "./batch";
 import { buildHighlighted } from "./highlight";
 import { compareRank, rankKeyFromRanges, type RankKey } from "./rank";
+import { riskForSize } from "./risk";
 
 type Bindings = {
   public_assets: Fetcher;
@@ -131,19 +132,11 @@ async function getAllRepos(token: string): Promise<RepoInfo[]> {
     for (const item of response.data) {
       const size_kb = Number(item.size) || 0;
       const size_mb = Math.round((size_kb / 1024) * 100) / 100;
-      let risk: "safe" | "warn" | "danger" = "safe";
-      if (size_mb < 800) {
-        risk = "safe";
-      } else if (size_mb <= 900) {
-        risk = "warn";
-      } else {
-        risk = "danger";
-      }
       repos.push({
         name: item.name,
         size: size_kb,
         size_mb,
-        risk,
+        risk: riskForSize(size_mb),
         description: item.description,
         html_url: item.html_url,
       });

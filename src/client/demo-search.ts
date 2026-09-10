@@ -3,6 +3,7 @@
 import { search as tseSearch } from "text-search-engine";
 import { buildHighlighted } from "../highlight";
 import { compareRank, rankKeyFromRanges, type RankKey } from "../rank";
+import { riskForSize } from "../risk";
 import type { RepoInfo, SearchResponse, SearchResult } from "./api";
 import { buildDemoCorpus } from "./demo-corpus";
 
@@ -13,14 +14,17 @@ export function listIndexes(): string[] {
 }
 
 export function listRepos(): RepoInfo[] {
-  return buildDemoCorpus().map((r, i) => ({
-    name: r.repository_short_name,
-    size: (i + 1) * 1024,
-    size_mb: Math.round(((i + 1) * 1024) / 1024),
-    risk: "safe" as const,
-    description: "演示数据，非真实仓库",
-    html_url: DEMO_GITHUB,
-  }));
+  return buildDemoCorpus().map((r) => {
+    const size_mb = Math.round((r.sizeKb / 1024) * 100) / 100;
+    return {
+      name: r.repository_short_name,
+      size: r.sizeKb,
+      size_mb,
+      risk: riskForSize(size_mb),
+      description: "演示数据，非真实仓库",
+      html_url: DEMO_GITHUB,
+    };
+  });
 }
 
 export async function searchIndexes(

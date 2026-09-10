@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Tabs, Button, DropdownMenu } from "@cloudflare/kumo";
-import { Sun, Moon, Desktop } from "@phosphor-icons/react";
+import { Sun, Moon, Desktop, GithubLogo } from "@phosphor-icons/react";
 import RepoList from "./components/RepoList";
 import Search from "./components/Search";
 import { loadSetting, applyTheme, subscribeSystem, type ThemeSetting } from "./theme";
@@ -58,12 +58,24 @@ export default function App() {
       <div className="mx-auto max-w-5xl p-4 sm:p-6 xl:max-w-7xl">
         {/* 不加 z-index：Kumo 弹框靠 body 末尾 portal 压住页面，有 z-index 反而会盖住弹框 */}
         <div className="bg-kumo-base sticky top-4 mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 shadow-sm">
-          <button
-            className="text-kumo-strong px-2 text-lg font-semibold sm:text-xl"
-            onClick={() => setTab("repos")}
-          >
-            RepoDex
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              className="text-kumo-strong px-2 text-lg font-semibold sm:text-xl"
+              onClick={() => setTab("repos")}
+            >
+              RepoDex
+            </button>
+            <Button
+              variant="ghost"
+              shape="square"
+              aria-label="GitHub 仓库"
+              title="GitHub 仓库"
+              icon={<GithubLogo />}
+              onClick={() =>
+                window.open("https://github.com/Jy-EggRoll/repodex", "_blank", "noopener,noreferrer")
+              }
+            />
+          </div>
           <div className="flex items-center gap-2">
             <Tabs
               variant="segmented"
@@ -102,7 +114,8 @@ export default function App() {
         </div>
 
         <footer className="text-kumo-subtle mt-6 pb-2 text-center text-xs">
-          Powered by Cloudflare Workers · Kumo
+          <div>© {new Date().getFullYear()} Jy-EggRoll · GPL-3.0</div>
+          <div className="mt-1">Powered by Cloudflare Workers · Kumo</div>
         </footer>
       </div>
     </div>

@@ -3,8 +3,13 @@ import { listIndexes, listRepos, searchIndexes } from "./demo-search";
 
 describe("demo-search", () => {
   it("索引与仓库列表非空", async () => {
-    expect(listIndexes()).toHaveLength(3);
-    expect(listRepos()).toHaveLength(3);
+    expect(listIndexes()).toHaveLength(5);
+    expect(listRepos()).toHaveLength(5);
+  });
+
+  it("三色风险徽章齐全", async () => {
+    const risks = new Set(listRepos().map((r) => r.risk));
+    expect(risks).toEqual(new Set(["safe", "warn", "danger"]));
   });
 
   it("英文与拼音都能搜到结果", async () => {

@@ -20,6 +20,8 @@ export interface DemoBranch {
 export interface DemoRepo {
   repository: string;
   repository_short_name: string;
+  /** 仓库体积（KB），与后端 GitHub API 的 size 单位一致 */
+  sizeKb: number;
   branches: DemoBranch[];
 }
 
@@ -53,11 +55,61 @@ const CN_WORDS = ["报告", "方案", "纪要", "合同", "手册", "计划", "�
 const CN_EXTS = ["md", "docx", "txt"];
 const CN_DIRS = ["文档", "资料", "归档"];
 
-const REPOS = [
-  { full: "repodex-demo/demo-code", short: "demo-code", branches: ["main", "dev"], n: 140 },
-  { full: "repodex-demo/demo-docs", short: "demo-docs", branches: ["main"], n: 120 },
-  { full: "repodex-demo/demo-media", short: "demo-media", branches: ["main"], n: 80 },
+interface RepoProfile {
+  full: string;
+  short: string;
+  branches: string[];
+  n: number;
+  /** 仓库体积（KB），驱动大小列与风险徽章 */
+  sizeKb: number;
+  /** 单文件体积上限（bytes） */
+  fileMax: number;
+}
+
+const REPOS: RepoProfile[] = [
+  {
+    full: "repodex-demo/demo-tiny",
+    short: "demo-tiny",
+    branches: ["main"],
+    n: 15,
+    sizeKb: 30 * 1024,
+    fileMax: 200 * 1024,
+  },
+  {
+    full: "repodex-demo/demo-code",
+    short: "demo-code",
+    branches: ["main", "dev"],
+    n: 140,
+    sizeKb: 700 * 1024,
+    fileMax: 2 * 1024 * 1024,
+  },
+  {
+    full: "repodex-demo/demo-docs",
+    short: "demo-docs",
+    branches: ["main"],
+    n: 120,
+    sizeKb: 500 * 1024,
+    fileMax: 5 * 1024 * 1024,
+  },
+  {
+    full: "repodex-demo/demo-media",
+    short: "demo-media",
+    branches: ["main"],
+    n: 80,
+    sizeKb: 850 * 1024,
+    fileMax: 50 * 1024 * 1024,
+  },
+  {
+    full: "repodex-demo/demo-large",
+    short: "demo-large",
+    branches: ["main", "dev"],
+    n: 400,
+    sizeKb: 1536 * 1024,
+    fileMax: 100 * 1024 * 1024,
+  },
 ];
+
+const BIG_ARCHIVES = ["dataset-2024.zip", "assets-backup.zip"];
 
 export const DEMO_SEED = 20260910;
 
@@ -68,6 +120,7 @@ export function buildDemoCorpus(seed: number = DEMO_SEED): DemoRepo[] {
   return REPOS.map((repo) => ({
     repository: repo.full,
     repository_short_name: repo.short,
+    sizeKb: repo.sizeKb,
     branches: repo.branches.map((branch_name) => {
       const files: DemoFile[] = [];
       const dirSet = new Set<string>();
@@ -79,7 +132,13 @@ export function buildDemoCorpus(seed: number = DEMO_SEED): DemoRepo[] {
           : `${pick(EN_WORDS)}-${i}.${pick(EN_EXTS)}`;
         const path = `${dir}/${name}`;
         dirSet.add(dir);
-        files.push({ name, path: `./${path}`, size: Math.floor(rand() * 200000) });
+        files.push({ name, path: `./${path}`, size: Math.floor(rand() * repo.fileMax) });
+      }
+      if (repo.short === "demo-large") {
+        for (const archive of BIG_ARCHIVES) {
+          files.push({ name: archive, path: `./assets/${archive}`, size: 80 * 1024 * 1024 });
+          dirSet.add("assets");
+        }
       }
       const directories: DemoDir[] = [...dirSet].map((d) => ({ name: d, path: `./${d}` }));
       return { branch_name, files, directories };
