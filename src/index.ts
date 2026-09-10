@@ -199,9 +199,6 @@ app.get("/api/search", async (c) => {
   const file = (c.req.query("file") || "all").trim();
   if (!q) return c.json({ error: "empty query" }, 400);
 
-  const rawReq = (c.req as any).raw as Request | undefined;
-  const base = rawReq?.url ?? c.req.url;
-
   if (!c.env.repo_index_kv) return c.json({ error: "repo_index_kv binding is not available" }, 500);
 
   try {

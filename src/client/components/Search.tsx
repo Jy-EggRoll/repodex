@@ -71,10 +71,14 @@ export default function Search() {
     });
   }
 
-  // 输入框非受控：敲字只走 DOM，不触发 React 渲染；搜索只由按钮/回车/切换手动触发
+  // 输入框非受控：敲字只走 DOM，不触发 React 渲染
   const inputRef = useRef<HTMLInputElement>(null);
   // 单调请求序号：过期响应直接丢弃，保证结果收敛到最后一次提交
   const requestIdRef = useRef(0);
+  // 自动提交：静置计时器 + 上次提交去重 + 拼音拼写守卫
+  const timerRef = useRef<number | null>(null);
+  const lastSubmittedRef = useRef("");
+  const composingRef = useRef(false);
 
   useEffect(() => {
     async function loadIndexes() {
@@ -110,11 +114,13 @@ export default function Search() {
       inputRef.current.value = "";
       inputRef.current.focus();
     }
+    lastSubmittedRef.current = "";
   }
 
   async function doSearch(q: string, list: string[], nameMode: boolean) {
     const v = q.trim();
     if (!v) return;
+    lastSubmittedRef.current = v;
     const id = ++requestIdRef.current;
     setError("");
     setErrorStatus(null);
@@ -142,6 +148,16 @@ export default function Search() {
 
   function searchFromInput(list = checked, nameMode = byName) {
     void doSearch(inputRef.current?.value ?? "", list, nameMode);
+  }
+
+  // 静置 200ms 自动提交；拼音拼写中直接返回，选词上屏后补发一次
+  function scheduleAutoSubmit() {
+    if (composingRef.current) return;
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      const v = (inputRef.current?.value ?? "").trim();
+      if (v && v !== lastSubmittedRef.current) searchFromInput();
+    }, 200);
   }
 
   function toggleOne(name: string, on: boolean) {
@@ -210,9 +226,17 @@ export default function Search() {
             <div className="min-w-0 flex-1">
               <Input
                 ref={inputRef}
-                placeholder="输入关键字，回车搜索（按 / 聚焦）"
+                placeholder="输入停顿即搜，回车立即搜（按 / 聚焦）"
+                onChange={scheduleAutoSubmit}
+                onCompositionStart={() => {
+                  composingRef.current = true;
+                }}
+                onCompositionEnd={() => {
+                  composingRef.current = false;
+                  scheduleAutoSubmit();
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") searchFromInput();
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) searchFromInput();
                 }}
               />
             </div>
