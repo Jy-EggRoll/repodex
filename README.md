@@ -2,18 +2,20 @@
 title: 项目介绍-repodex
 description: 基于 GitHub Actions、Cloudflare Workers 和 React + Vite + Kumo 前端，实现了一套跨仓库、跨分支的多维度模糊搜索系统，以提升用户在 GitHub 上的文件检索效率。
 date: 2026-01-16
-lastmod: 2026-09-09
-image: 
+lastmod: 2026-09-10
+image:
 categories:
-    - 项目
+  - 项目
 tags:
-    - Cloudflare
-    - GitHub
-    - 模糊搜索
+  - Cloudflare
+  - GitHub
+  - 模糊搜索
 weight: 1
 ---
 
 # RepoDex
+
+[![Check](https://github.com/Jy-EggRoll/repodex/actions/workflows/check.yml/badge.svg)](https://github.com/Jy-EggRoll/repodex/actions/workflows/check.yml)
 
 命名：RepositoryIndex——仓库索引聚合。
 
@@ -39,7 +41,7 @@ weight: 1
 
 ![选择索引](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/选择索引.png)
 
-本项目支持选择索引，默认全选。选中或取消选中后会在短暂的防抖延时后自动刷新结果列表。
+本项目支持选择索引，默认全选。弹框内可即时筛选索引名，一键全选 / 反选 / 清除；切换选项后如有关键词会立即重搜。搜索为手动提交（回车或按钮），结果分页展示、可加载更多。
 
 ### 美观的宽屏布局
 
@@ -121,7 +123,7 @@ weight: 1
 
 索引由本仓库的中央工作流（`.github/workflows/central-index.yml`）统一生成，**各仓库无需配置任何 Secrets、无需添加任何文件**：
 
-- 自动发现：每小时整点扫描名下所有仓库（归档/禁用自动跳过），只重新生成有变化的仓库，无变化零 clone 直接跳过。
+- 自动发现：每小时整点扫描名下所有仓库（归档/禁用自动跳过），对比分支 SHA，只对有变化的仓库拉取文件树（GitHub API，零 clone），无变化直接跳过。
 - 黑名单：不想被索引的仓库，在本仓库根目录 `repos-blocklist.txt` 加一行 `owner/repo` 即可。
 - 手动补跑：Actions 页 → Central Repository Index → Run workflow，可指定单个仓库、可 dry-run 预览。
 - 删库清理：仓库删除后，其索引 key 会在下次同步时自动清理。
@@ -131,12 +133,12 @@ weight: 1
 
 在本仓库 Settings → Secrets and variables → Actions 中配置：
 
-| Secret | 用途 | 获取方式 |
-| --- | --- | --- |
-| `REPOS_PAT` | 读取名下所有仓库的文件树。必须用细粒度 PAT：权限只开 Contents 只读 + Metadata 只读，Repository access 选 All repositories（覆盖未来新仓库）。注意：Actions 默认 `GITHUB_TOKEN` 只能读本仓库，跨仓读取必须配此项，不可省 | <https://github.com/settings/personal-access-tokens/new> |
-| `CF_ACCOUNT_ID` | 同【信息 1】 | 见上文 |
-| `CF_NAMESPACE_ID` | 同【信息 2】 | 见上文 |
-| `CF_API_TOKEN` | 同【信息 3】，需 Workers KV Storage 写权限 | 见上文 |
+| Secret            | 用途                                                                                                                                                                                                                    | 获取方式                                                 |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `REPOS_PAT`       | 读取名下所有仓库的文件树。必须用细粒度 PAT：权限只开 Contents 只读 + Metadata 只读，Repository access 选 All repositories（覆盖未来新仓库）。注意：Actions 默认 `GITHUB_TOKEN` 只能读本仓库，跨仓读取必须配此项，不可省 | <https://github.com/settings/personal-access-tokens/new> |
+| `CF_ACCOUNT_ID`   | 同【信息 1】                                                                                                                                                                                                            | 见上文                                                   |
+| `CF_NAMESPACE_ID` | 同【信息 2】                                                                                                                                                                                                            | 见上文                                                   |
+| `CF_API_TOKEN`    | 同【信息 3】，需 Workers KV Storage 写权限                                                                                                                                                                              | 见上文                                                   |
 
 > 如已有 `REPO_INFO_TOKEN`（经典 token，repo 全权限）也可临时复用为 `REPOS_PAT`，但权限过大，仅建议过渡期使用，长期请换细粒度只读 token。
 
@@ -164,11 +166,27 @@ weight: 1
 
 ### 中央索引工作流
 
-一套运行在本仓库的自动化工作流（`.github/workflows/central-index.yml` + `scripts/generate_index.py`）。
+一套运行在本仓库的自动化工作流（`.github/workflows/central-index.yml` + `scripts/generate_index.mjs`，零依赖，Node 24 内置 fetch）。
 
 工作流的任务：
 
 每小时整点（或手动触发）扫描名下所有仓库，对比 KV 中记录的分支 SHA，只对有变化的仓库拉取文件树、生成统一的全局索引并推送至 Cloudflare KV 存储，同时清理已删除仓库的僵尸索引。
+
+KV 中的 key 布局：`{仓库短名}-index`（仓库索引）、`repo-info-cache`（仓库列表缓存，10 分钟过期）、`__meta-sha-table`（分支 SHA 记录表，变化检测用，均非 bug）。
+
+## 本地开发与工程化
+
+```bash
+pnpm install        # 安装依赖
+pnpm dev:client     # 前端本地开发（Vite）
+pnpm dev            # Worker 本地开发（需 wrangler 登录）
+pnpm check          # 门禁：格式化检查 + 类型检查 + 测试 + 构建
+pnpm test           # 单元测试（Vitest，纯逻辑种子）
+pnpm format         # Prettier 全仓格式化（含 Tailwind 类序）
+pnpm deploy         # 构建前端并部署 Worker
+```
+
+提交前跑一遍 `pnpm check`；CI（`.github/workflows/check.yml`）会在 push/PR 时自动跑同一套。
 
 ## 统计
 
