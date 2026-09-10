@@ -78,7 +78,7 @@ weight: 1
 
 ![创建流程](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-1.png)
 
-复制 Account ID（= `CF_ACCOUNT_ID`）收好。
+复制 Account ID（= `CF_ACCOUNT_ID`）。
 
 ![连接-GitHub](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-2.png)
 
@@ -86,7 +86,7 @@ weight: 1
 
 > [!IMPORTANT]
 >
-> 构建设置：构建命令填 `pnpm build`，部署命令填 `npx wrangler deploy --minify`。漏掉构建命令会部署失败（产物目录 `dist/` 已在 `wrangler.jsonc` 配好，无需指定输出目录）。
+> 构建设置：构建命令填 `pnpm build`，部署命令填 `npx wrangler deploy`。漏掉构建命令会部署失败（产物目录 `dist/` 已在 `wrangler.jsonc` 配好，无需指定输出目录）。
 
 ### 2. Cloudflare 侧三项
 
@@ -132,7 +132,7 @@ weight: 1
 
 - **拼音搜索与模糊搜索**：用户只需要记得文件名中的一些关键词，就可以模糊查找到任何文件。默认启用“以路径搜索”，即使用户的关键词没有体现在文件名本身中，只要用户的分类是合理的，即关键词体现在路径中，也可以搜索到文件。
 - **高性能**：Cloudflare Workers 配合 Cloudflare KV，搜索速度很快。此外，受益于 Cloudflare 自身在全球的强大 CDN，网页本身的访问速度也并不慢。从 Cloudflare 向 GitHub 发起请求的速度也比较理想。
-- **私密性极强**：本项目可接入任意私有仓库，搜索前端页面采用 HTTPS 加密鉴权（Hono 框架），只有同时获得 Cloudflare 机密中用户名与密码的用户，才可以访问（通常也就是用户自己）。若用户担心用户名与密码同时泄露，可以随意在 Cloudflare 后台更改。本项目直接保护网站的根路径，在未授权情况下无法访问任何 api 与页面资源，这甚至杜绝了被攻击的风险。
+- **私密性极强**：采用 HTTPS 加密鉴权（Hono 框架），只有同时获得 Cloudflare 机密中用户名与密码的用户，才可以访问（通常也就是用户自己）。若用户担心用户名与密码同时泄露，可以随意在 Cloudflare 后台更改。本项目直接保护网站的根路径，在未授权情况下无法访问任何 api 与页面资源，这甚至杜绝了被攻击的风险。
 
 ## 核心组件
 
