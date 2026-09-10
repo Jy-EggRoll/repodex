@@ -80,7 +80,7 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 const ALL_KEY = "__ALL_INDEX__";
 // 单次搜索最多返回条数：只截断高亮构建 + 序列化，total 仍返回全量计数
-const MAX_RESULTS = 300;
+const MAX_RESULTS = 100;
 // 并行分批大小：I/O 重叠，峰值内存有界；100 为实测值，若 503 回归则降回
 const BATCH_SIZE = 100;
 
@@ -324,11 +324,12 @@ app.get("/api/search", async (c) => {
 
     const mode = (c.req.query("mode") || "path").trim();
 
-    // 第一阶段：全量只算分（不拼高亮），顺手计文件/文件夹数
-    const scored: Array<{ it: SearchItem; ranges: any; score: number }> = [];
+    // 第一阶段：全量只记下标和分数（不存 ranges 坐标），顺手计文件/文件夹数
+    const scored: Array<{ idx: number; score: number }> = [];
     let fileCount = 0;
     let dirCount = 0;
-    for (const it of items) {
+    for (let idx = 0; idx < items.length; idx++) {
+      const it = items[idx];
       try {
         const target = mode === "name" ? it.name || "" : it.path || it.name || "";
         if (!target) continue;
@@ -341,15 +342,17 @@ app.get("/api/search", async (c) => {
 
         if (it.type === "directory") dirCount += 1;
         else fileCount += 1;
-        scored.push({ it, ranges, score });
+        scored.push({ idx, score });
       } catch (se) {}
     }
     const tSearch = Date.now();
 
-    // 第二阶段：排序截断后，只给入选条目拼高亮
+    // 第二阶段：排序截断后，只给入选条目重跑匹配拿 ranges 拼高亮
     scored.sort((a, b) => b.score - a.score);
-    const results: SearchResult[] = scored.slice(0, MAX_RESULTS).map(({ it, ranges, score }) => {
+    const results: SearchResult[] = scored.slice(0, MAX_RESULTS).map(({ idx, score }) => {
+      const it = items[idx];
       const target = mode === "name" ? it.name || "" : it.path || it.name || "";
+      const ranges = tseSearch(target, q) ?? [];
       const chars = Array.from(target);
       const markStarts = new Set<number>();
       const markEnds = new Set<number>();
