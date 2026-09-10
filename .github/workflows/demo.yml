@@ -33,8 +33,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # 不用 .env.demo 文件传参：会被全局 gitignore 吃掉。用环境变量直供。
       - name: Build demo
-        run: pnpm exec vite build --mode demo --base=/repodex/ --outDir dist-demo
+        run: VITE_DEMO=1 pnpm exec vite build --base=/repodex/ --outDir dist-demo
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
