@@ -1,7 +1,14 @@
 import { memo, startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Input, Switch, Checkbox, Badge, Dialog, Banner, Loader, Empty } from "@cloudflare/kumo";
 import { Bug, X } from "@phosphor-icons/react";
-import { ApiError, buildFileParam, fetchIndexList, searchFiles, type SearchResult } from "../api";
+import {
+  ApiError,
+  buildFileParam,
+  fetchIndexList,
+  searchFiles,
+  type SearchPerf,
+  type SearchResult,
+} from "../api";
 import { formatFileSize } from "../format";
 import ResultCard from "./ResultCard";
 
@@ -41,13 +48,7 @@ export default function Search() {
   const [total, setTotal] = useState(0);
   const [fileCount, setFileCount] = useState(0);
   const [dirCount, setDirCount] = useState(0);
-  const [perf, setPerf] = useState<{
-    tookMs: number;
-    loadMs: number;
-    searchMs: number;
-    cached: boolean;
-    roundTripMs: number;
-  } | null>(null);
+  const [perf, setPerf] = useState<SearchPerf | null>(null);
   const [debug, setDebug] = useState(() => {
     try {
       return localStorage.getItem("repodex-debug") === "1";
@@ -126,13 +127,7 @@ export default function Search() {
       setTotal(data.total);
       setFileCount(data.fileCount);
       setDirCount(data.dirCount);
-      setPerf({
-        tookMs: data.tookMs,
-        loadMs: data.loadMs,
-        searchMs: data.searchMs,
-        cached: data.cached,
-        roundTripMs: Math.round(performance.now() - tStart),
-      });
+      setPerf({ ...data, roundTripMs: Math.round(performance.now() - tStart) });
       startTransition(() => {
         setResults(data.results);
       });
@@ -352,6 +347,9 @@ export default function Search() {
                 <div className="text-kumo-subtle mt-1">
                   网络来回 {perf.roundTripMs}ms · 索引缓存 {perf.cached ? "命中" : "未命中"} · 返回{" "}
                   {results.length}/{total}
+                </div>
+                <div className="text-kumo-subtle mt-1">
+                  索引 {perf.indexCount} 个 · 语料 {perf.itemsTotal} 条 · 加载失败 {perf.loadFailCount}
                 </div>
               </div>
             )}

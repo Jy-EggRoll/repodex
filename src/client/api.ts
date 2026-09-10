@@ -47,10 +47,17 @@ export interface SearchResponse {
   total: number;
   fileCount: number;
   dirCount: number;
+  indexCount: number;
+  itemsTotal: number;
+  loadFailCount: number;
   tookMs: number;
   loadMs: number;
   searchMs: number;
   cached: boolean;
+}
+
+export interface SearchPerf extends SearchResponse {
+  roundTripMs: number;
 }
 
 /** 选中索引转 file 查询参数：全选或未选都走 all。 */

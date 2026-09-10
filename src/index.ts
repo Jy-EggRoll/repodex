@@ -109,20 +109,6 @@ async function getCachedItems(
   return { items, cached: false };
 }
 
-/** 并行加载多个索引：I/O 重叠，单 key 失败只记日志跳过。 */
-async function loadMany(c: any, names: string[]): Promise<IndexJson[]> {
-  const settled = await Promise.allSettled(names.map((n) => loadIndexByName(c, n)));
-  const out: IndexJson[] = [];
-  settled.forEach((r, i) => {
-    if (r.status === "fulfilled") {
-      if (r.value) out.push(r.value);
-    } else {
-      console.error(`Failed to load index ${names[i]}:`, r.reason);
-    }
-  });
-  return out;
-}
-
 function basename(p: string) {
   if (!p) return "";
   p = p.replace(/^\.\//, "").replace(/^\//, "");
@@ -302,6 +288,8 @@ app.get("/api/search", async (c) => {
     if (isSingle && (cacheKey.includes("..") || cacheKey.includes("/"))) {
       return c.json({ error: "invalid file" }, 400);
     }
+    // 串行加载：峰值内存/CPU 最低，等待不占预算；并行已证伪，不再尝试
+    let loadFailCount = 0;
     const loaded = await getCachedItems(cacheKey, async () => {
       const merged: SearchItem[] = [];
       if (cacheKey === ALL_KEY) {
@@ -315,7 +303,16 @@ app.get("/api/search", async (c) => {
 
         // 只加载仓库索引，跳过 repo-info-cache 等其它 key
         const names = filesList.filter((fname) => fname && fname.endsWith("-index"));
-        for (const fj of await loadMany(c, names)) parseIndexJson(fj, merged);
+        for (const fname of names) {
+          try {
+            const fj = await loadIndexByName(c, fname);
+            if (!fj) continue;
+            parseIndexJson(fj, merged);
+          } catch (e) {
+            loadFailCount += 1;
+            console.error(`Failed to load index ${fname}:`, e);
+          }
+        }
       } else if (cacheKey.includes(",")) {
         const fileList = cacheKey
           .split(",")
@@ -323,15 +320,22 @@ app.get("/api/search", async (c) => {
           .filter(Boolean);
         const seen = new Set<string>();
         const names = fileList.filter((fname) => fname && !fname.includes("..") && !fname.includes("/"));
-        for (const fj of await loadMany(c, names)) {
-          const temp: SearchItem[] = [];
-          parseIndexJson(fj, temp);
+        for (const fname of names) {
+          try {
+            const fj = await loadIndexByName(c, fname);
+            if (!fj) continue;
+            const temp: SearchItem[] = [];
+            parseIndexJson(fj, temp);
 
-          for (const it of temp) {
-            const key = `${it.repository || ""}|${it.branch || ""}|${it.path || ""}|${it.type || ""}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            merged.push(it);
+            for (const it of temp) {
+              const key = `${it.repository || ""}|${it.branch || ""}|${it.path || ""}|${it.type || ""}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              merged.push(it);
+            }
+          } catch (e) {
+            loadFailCount += 1;
+            console.error(`Failed to load index ${fname}:`, e);
           }
         }
       } else {
@@ -344,6 +348,8 @@ app.get("/api/search", async (c) => {
     });
     items = loaded.items;
     const tLoad = Date.now();
+    const indexCount = new Set(items.map((i) => i.repository)).size;
+    const itemsTotal = items.length;
     if (isSingle && items.length === 0) {
       // 区分“索引不存在”与“索引为空”：空结果时复查一次 KV
       const fj = await loadIndexByName(c, cacheKey);
@@ -414,12 +420,21 @@ app.get("/api/search", async (c) => {
       return result;
     });
 
+    const tookMs = Date.now() - t0;
+    console.log(
+      `[search] q=${q} file=${file} mode=${mode} total=${scored.length} ` +
+        `tookMs=${tookMs} loadMs=${tLoad - t0} searchMs=${tSearch - tLoad} ` +
+        `cached=${loaded.cached} indexes=${indexCount} items=${itemsTotal} fail=${loadFailCount}`,
+    );
     return c.json({
       results,
       total: scored.length,
       fileCount,
       dirCount,
-      tookMs: Date.now() - t0,
+      indexCount,
+      itemsTotal,
+      loadFailCount,
+      tookMs,
       loadMs: tLoad - t0,
       searchMs: tSearch - tLoad,
       cached: loaded.cached,
