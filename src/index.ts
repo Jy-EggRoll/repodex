@@ -82,7 +82,7 @@ const ALL_KEY = "__ALL_INDEX__";
 // 单次搜索最多返回条数：只截断高亮构建 + 序列化，total 仍返回全量计数
 const MAX_RESULTS = 100;
 // 匹配收集上限：满即停，total 标约数；给短查询的内存/CPU 上保险丝
-const SCORE_CAP = 5000;
+const SCORE_CAP = 1000;
 // 并行分批大小：I/O 重叠，峰值内存有界；100 为实测值，若 503 回归则降回
 const BATCH_SIZE = 100;
 
