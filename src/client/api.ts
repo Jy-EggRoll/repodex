@@ -69,9 +69,11 @@ export async function searchFiles(
   q: string,
   fileParam: string,
   mode: "path" | "name",
+  limit = 100,
+  offset = 0,
 ): Promise<SearchResponse> {
   const res = await fetch(
-    `/api/search?q=${encodeURIComponent(q)}&file=${encodeURIComponent(fileParam)}&mode=${mode}`,
+    `/api/search?q=${encodeURIComponent(q)}&file=${encodeURIComponent(fileParam)}&mode=${mode}&limit=${limit}&offset=${offset}`,
   );
   if (!res.ok) {
     const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };

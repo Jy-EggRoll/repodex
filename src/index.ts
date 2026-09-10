@@ -79,8 +79,8 @@ interface RepoInfoCache {
 const app = new Hono<{ Bindings: Bindings }>();
 
 const ALL_KEY = "__ALL_INDEX__";
-// 单次搜索最多返回条数：只截断高亮构建 + 序列化，total 仍返回全量计数
-const MAX_RESULTS = 100;
+// 单次响应最多返回条数（防传输爆炸）；配合 limit/offset 翻页取全量
+const MAX_RESULTS = 1000;
 // 匹配收集上限：满即停，total 标约数；给短查询的内存/CPU 上保险丝
 const SCORE_CAP = 1000;
 // 并行分批大小：I/O 重叠，峰值内存有界；100 为实测值，若 503 回归则降回
@@ -202,6 +202,9 @@ app.get("/api/search", async (c) => {
   const q = (c.req.query("q") || "").trim();
   const file = (c.req.query("file") || "all").trim();
   if (!q) return c.json({ error: "empty query" }, 400);
+  // 分页：limit 单页条数（默认 100，上限 MAX_RESULTS），offset 起始下标
+  const limit = Math.min(Math.max(Number(c.req.query("limit")) || 100, 1), MAX_RESULTS);
+  const offset = Math.max(Number(c.req.query("offset")) || 0, 0);
 
   if (!c.env.repo_index_kv) return c.json({ error: "repo_index_kv binding is not available" }, 500);
 
@@ -357,9 +360,10 @@ app.get("/api/search", async (c) => {
     }
     const tSearch = Date.now();
 
-    // 第二阶段：排序截断后，只给入选条目重跑匹配拿 ranges 拼高亮
+    // 第二阶段：排序后按 offset/limit 取页，只给本页条目重跑匹配拿 ranges 拼高亮
     scored.sort((a, b) => compareRank(a.key, b.key));
-    const results: SearchResult[] = scored.slice(0, MAX_RESULTS).map(({ idx, key }) => {
+    const page = scored.slice(offset, offset + limit).slice(0, MAX_RESULTS);
+    const results: SearchResult[] = page.map(({ idx, key }) => {
       const it = items[idx];
       const target = mode === "name" ? it.name || "" : it.path || it.name || "";
       const ranges = [...(tseSearch(target, q) ?? [])].sort((a, b) => a[0] - b[0]);
@@ -400,6 +404,7 @@ app.get("/api/search", async (c) => {
     const tookMs = Date.now() - t0;
     console.log(
       `[search] q=${q} file=${file} mode=${mode} total=${scored.length}${truncated ? "+" : ""} ` +
+        `offset=${offset} limit=${limit} ` +
         `tookMs=${tookMs} loadMs=${tLoad - t0} searchMs=${tSearch - tLoad} ` +
         `indexes=${indexCount} items=${itemsTotal} fail=${loadFailCount}`,
     );

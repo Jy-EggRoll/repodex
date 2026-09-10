@@ -48,6 +48,7 @@ export default function Search() {
   const [total, setTotal] = useState(0);
   const [fileCount, setFileCount] = useState(0);
   const [dirCount, setDirCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [perf, setPerf] = useState<SearchPerf | null>(null);
   const [debug, setDebug] = useState(() => {
     try {
@@ -56,8 +57,8 @@ export default function Search() {
       return false;
     }
   });
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   function toggleDebug() {
     setDebug((d) => {
@@ -121,9 +122,14 @@ export default function Search() {
     setSearching(true);
     try {
       const tStart = performance.now();
-      const data = await searchFiles(v, buildFileParam(list, indexes.length), nameMode ? "name" : "path");
+      const data = await searchFiles(
+        v,
+        buildFileParam(list, indexes.length),
+        nameMode ? "name" : "path",
+        PAGE_SIZE,
+        0,
+      );
       if (id !== requestIdRef.current) return;
-      setVisibleCount(PAGE_SIZE);
       setTotal(data.total);
       setFileCount(data.fileCount);
       setDirCount(data.dirCount);
@@ -144,13 +150,54 @@ export default function Search() {
     void doSearch(inputRef.current?.value ?? "", list, nameMode);
   }
 
+  // 无限滚动：滑到底自动申请下一页并追加
+  async function loadMore() {
+    if (results === null || loadingMore || searching) return;
+    if (results.length >= total) return;
+    const id = ++requestIdRef.current;
+    setLoadingMore(true);
+    try {
+      const q = inputRef.current?.value ?? "";
+      const data = await searchFiles(
+        q,
+        buildFileParam(checked, indexes.length),
+        byName ? "name" : "path",
+        PAGE_SIZE,
+        results.length,
+      );
+      if (id !== requestIdRef.current) return;
+      startTransition(() => {
+        setResults((prev) => [...(prev ?? []), ...data.results]);
+      });
+    } catch (e) {
+      if (id !== requestIdRef.current) return;
+      setErrorStatus(e instanceof ApiError ? e.status : null);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (id === requestIdRef.current) setLoadingMore(false);
+    }
+  }
+
+  const hasMore = results !== null && results.length < total;
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore || loadingMore || searching) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((en) => en.isIntersecting)) void loadMore();
+      },
+      { rootMargin: "400px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, searching, results?.length]);
+
   function toggleOne(name: string, on: boolean) {
     const next = on ? [...checked, name] : checked.filter((v) => v !== name);
     setChecked(next);
     searchFromInput(next);
   }
-
-  const visibleResults = useMemo(() => results?.slice(0, visibleCount) ?? null, [results, visibleCount]);
 
   const [indexFilter, setIndexFilter] = useState("");
   const filteredIndexes = useMemo(() => {
@@ -341,7 +388,7 @@ export default function Search() {
         {results !== null && results.length === 0 && !searching && (
           <Empty title="未找到匹配" description="换个关键字或调整索引选择试试" />
         )}
-        {visibleResults !== null && visibleResults.length > 0 && results !== null && (
+        {results !== null && results.length > 0 && (
           <div>
             <h2 className="text-kumo-strong mb-2 text-lg font-semibold">
               匹配结果（共 {total}
@@ -361,18 +408,20 @@ export default function Search() {
               </div>
             )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-              {visibleResults.map((item, i) => (
+              {results.map((item, i) => (
                 <ResultRow
                   key={`${item.repository}-${item.branch}-${item.path}-${item.type}-${i}`}
                   item={item}
                 />
               ))}
             </div>
-            {visibleCount < results.length && (
-              <div className="mt-4 flex justify-center">
-                <Button variant="secondary" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
-                  加载更多（已显示 {visibleResults.length} / 共 {results.length}）
-                </Button>
+            <div ref={sentinelRef} />
+            {loadingMore && (
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <Loader size="sm" />
+                <span className="text-kumo-subtle text-sm">
+                  加载更多（已显示 {results.length} / 共 {total}）
+                </span>
               </div>
             )}
           </div>
