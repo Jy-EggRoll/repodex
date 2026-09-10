@@ -24,7 +24,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-kumo-tint text-kumo-default antialiased">
       <div className="mx-auto max-w-5xl p-4 sm:p-6 xl:max-w-7xl">
-        <div className="sticky top-4 z-10 mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-kumo-base px-4 py-3 shadow-sm">
+        {/* 不加 z-index：Kumo 弹框靠 body 末尾 portal 压住页面，有 z-index 反而会盖住弹框 */}
+        <div className="sticky top-4 mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-kumo-base px-4 py-3 shadow-sm">
           <button
             className="px-2 text-lg font-semibold text-kumo-strong sm:text-xl"
             onClick={() => setTab('repos')}

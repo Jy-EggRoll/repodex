@@ -107,18 +107,38 @@ export default function Search() {
     searchFromInput(next);
   }
 
-  function toggleAll(on: boolean) {
-    const next = on ? indexes : [];
-    setChecked(next);
-    searchFromInput(next);
-  }
-
   const visibleResults = useMemo(
     () => results?.slice(0, visibleCount) ?? null,
     [results, visibleCount],
   );
 
-  const allChecked = indexes.length > 0 && checked.length === indexes.length;
+  const [indexFilter, setIndexFilter] = useState('');
+  const filteredIndexes = useMemo(() => {
+    const kw = indexFilter.trim().toLowerCase();
+    return kw ? indexes.filter((n) => n.toLowerCase().includes(kw)) : indexes;
+  }, [indexes, indexFilter]);
+
+  function selectAll() {
+    const next = Array.from(new Set([...checked, ...filteredIndexes]));
+    setChecked(next);
+    searchFromInput(next);
+  }
+
+  function clearAll() {
+    const next = checked.filter((n) => !filteredIndexes.includes(n));
+    setChecked(next);
+    searchFromInput(next);
+  }
+
+  function invertSelection() {
+    const next = [
+      ...checked.filter((n) => !filteredIndexes.includes(n)),
+      ...filteredIndexes.filter((n) => !checked.includes(n)),
+    ];
+    setChecked(next);
+    searchFromInput(next);
+  }
+
   const countLabel = loadingIndexes
     ? '（请求索引中）'
     : checked.length === 0
@@ -162,7 +182,7 @@ export default function Search() {
           </div>
           <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
             <Dialog.Trigger render={(p) => <Button {...p} variant="outline">选择索引 <span className="ml-2 text-sm text-kumo-subtle">{countLabel}</span></Button>} />
-            <Dialog size="lg" className="p-4 sm:p-6">
+            <Dialog size="xl" className="p-4 sm:p-6">
               <div className="mb-4 flex items-start justify-between gap-4">
                 <Dialog.Title className="text-xl font-semibold">选择索引</Dialog.Title>
                 <Dialog.Close
@@ -170,19 +190,36 @@ export default function Search() {
                   render={(props) => <Button {...props} variant="secondary" shape="square" icon={<X />} aria-label="Close" />}
                 />
               </div>
-              <div className="max-h-64 overflow-auto rounded-lg bg-kumo-base p-2">
-                <div className="mb-2">
-                  <Checkbox label="全部索引" checked={allChecked} onCheckedChange={(v) => toggleAll(v === true)} />
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="min-w-0 flex-1">
+                  <Input
+                    placeholder="筛选索引…"
+                    value={indexFilter}
+                    onChange={(e) => setIndexFilter(e.target.value)}
+                  />
                 </div>
-                {indexes.map((fname) => (
-                  <div key={fname} className="mb-1">
-                    <Checkbox
-                      label={<span className="break-all text-sm">{fname}</span>}
-                      checked={checked.includes(fname)}
-                      onCheckedChange={(v) => toggleOne(fname, v === true)}
-                    />
+                <div className="flex shrink-0 gap-2">
+                  <Button variant="secondary" size="sm" onClick={selectAll}>全选</Button>
+                  <Button variant="secondary" size="sm" onClick={invertSelection}>反选</Button>
+                  <Button variant="secondary" size="sm" onClick={clearAll}>清除</Button>
+                </div>
+              </div>
+              <div className="max-h-[60vh] overflow-auto rounded-lg bg-kumo-base p-2">
+                {filteredIndexes.length === 0 ? (
+                  <div className="p-3 text-sm text-kumo-subtle">无匹配索引</div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {filteredIndexes.map((fname) => (
+                      <div key={fname}>
+                        <Checkbox
+                          label={<span className="break-all text-sm">{fname}</span>}
+                          checked={checked.includes(fname)}
+                          onCheckedChange={(v) => toggleOne(fname, v === true)}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
               <div className="mt-8 flex justify-end gap-2">
                 <Dialog.Close render={(props) => <Button variant="primary" {...props}>完成</Button>} />
