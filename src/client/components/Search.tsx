@@ -310,8 +310,8 @@ export default function Search() {
         <div className="mt-4">
           <Banner
             variant="error"
-            title="搜索失败"
-            description={errorStatus === 503 ? "服务端计算超时，请缩短关键词、只选单个索引后重试。" : error}
+            title={`搜索失败${errorStatus ? `（${errorStatus}）` : ""}`}
+            description={error}
           />
           <div className="mt-2">
             <Button variant="secondary" size="sm" onClick={() => searchFromInput()}>
@@ -345,8 +345,7 @@ export default function Search() {
                   服务端 {perf.tookMs}ms（取数 {perf.loadMs} / 匹配 {perf.searchMs}）
                 </div>
                 <div className="text-kumo-subtle mt-1">
-                  网络来回 {perf.roundTripMs}ms · 索引缓存 {perf.cached ? "命中" : "未命中"} · 返回{" "}
-                  {results.length}/{total}
+                  网络来回 {perf.roundTripMs}ms · 返回 {results.length}/{total}
                 </div>
                 <div className="text-kumo-subtle mt-1">
                   索引 {perf.indexCount} 个 · 语料 {perf.itemsTotal} 条 · 加载失败 {perf.loadFailCount}

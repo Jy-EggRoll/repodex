@@ -4,6 +4,7 @@ import { basicAuth } from "hono/basic-auth";
 import { prettyJSON } from "hono/pretty-json";
 import { Octokit } from "octokit";
 import { search as tseSearch } from "text-search-engine";
+import { chunk } from "./batch";
 
 type Bindings = {
   public_assets: Fetcher;
@@ -78,36 +79,10 @@ interface RepoInfoCache {
 const app = new Hono<{ Bindings: Bindings }>();
 
 const ALL_KEY = "__ALL_INDEX__";
-// 解析后的 items 缓存 TTL（秒）：连击输入时跳过 KV 读 + parse + merge
-const ITEMS_CACHE_TTL = 120;
 // 单次搜索最多返回条数：只截断高亮构建 + 序列化，total 仍返回全量计数
 const MAX_RESULTS = 300;
-
-async function getCachedItems(
-  cacheKey: string,
-  loader: () => Promise<SearchItem[]>,
-): Promise<{ items: SearchItem[]; cached: boolean }> {
-  const url = `https://repodex-items.local/${encodeURIComponent(cacheKey)}`;
-  const cache = await caches.open("repodex-items");
-  try {
-    const hit = await cache.match(url);
-    if (hit) return { items: (await hit.json()) as SearchItem[], cached: true };
-  } catch {
-    // miss：继续走 KV 加载
-  }
-  const items = await loader();
-  try {
-    await cache.put(
-      url,
-      new Response(JSON.stringify(items), {
-        headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${ITEMS_CACHE_TTL}` },
-      }),
-    );
-  } catch {
-    // 缓存写失败不影响返回
-  }
-  return { items, cached: false };
-}
+// 并行分批大小：I/O 重叠但内存峰值有界（无上限版已证伪，不再尝试）
+const BATCH_SIZE = 20;
 
 function basename(p: string) {
   if (!p) return "";
@@ -288,65 +263,59 @@ app.get("/api/search", async (c) => {
     if (isSingle && (cacheKey.includes("..") || cacheKey.includes("/"))) {
       return c.json({ error: "invalid file" }, 400);
     }
-    // 串行加载：峰值内存/CPU 最低，等待不占预算；并行已证伪，不再尝试
+    // 分批并行加载：批内并发、批间串行，峰值内存有界；每次全新加载，无缓存
     let loadFailCount = 0;
-    const loaded = await getCachedItems(cacheKey, async () => {
-      const merged: SearchItem[] = [];
-      if (cacheKey === ALL_KEY) {
-        let filesList: string[] = [];
-        try {
-          const kvList = await c.env.repo_index_kv.list({ limit: 1000 });
-          filesList = Array.isArray(kvList.keys) ? kvList.keys.map((k: any) => k.name) : [];
-        } catch (e) {
-          filesList = [];
-        }
+    async function loadOne(fname: string, into: SearchItem[]): Promise<void> {
+      try {
+        const fj = await loadIndexByName(c, fname);
+        if (!fj) return;
+        parseIndexJson(fj, into);
+      } catch (e) {
+        loadFailCount += 1;
+        console.error(`Failed to load index ${fname}:`, e);
+      }
+    }
+    async function loadBatched(names: string[], into: SearchItem[]): Promise<void> {
+      for (const batch of chunk(names, BATCH_SIZE)) {
+        await Promise.all(batch.map((fname) => loadOne(fname, into)));
+      }
+    }
 
-        // 只加载仓库索引，跳过 repo-info-cache 等其它 key
-        const names = filesList.filter((fname) => fname && fname.endsWith("-index"));
-        for (const fname of names) {
-          try {
-            const fj = await loadIndexByName(c, fname);
-            if (!fj) continue;
-            parseIndexJson(fj, merged);
-          } catch (e) {
-            loadFailCount += 1;
-            console.error(`Failed to load index ${fname}:`, e);
-          }
-        }
-      } else if (cacheKey.includes(",")) {
-        const fileList = cacheKey
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        const seen = new Set<string>();
-        const names = fileList.filter((fname) => fname && !fname.includes("..") && !fname.includes("/"));
-        for (const fname of names) {
-          try {
-            const fj = await loadIndexByName(c, fname);
-            if (!fj) continue;
-            const temp: SearchItem[] = [];
-            parseIndexJson(fj, temp);
-
-            for (const it of temp) {
-              const key = `${it.repository || ""}|${it.branch || ""}|${it.path || ""}|${it.type || ""}`;
-              if (seen.has(key)) continue;
-              seen.add(key);
-              merged.push(it);
-            }
-          } catch (e) {
-            loadFailCount += 1;
-            console.error(`Failed to load index ${fname}:`, e);
-          }
-        }
-      } else {
-        const fj = await loadIndexByName(c, cacheKey);
-        if (!fj) return merged;
-        parseIndexJson(fj, merged);
+    const merged: SearchItem[] = [];
+    if (cacheKey === ALL_KEY) {
+      let filesList: string[] = [];
+      try {
+        const kvList = await c.env.repo_index_kv.list({ limit: 1000 });
+        filesList = Array.isArray(kvList.keys) ? kvList.keys.map((k: any) => k.name) : [];
+      } catch (e) {
+        filesList = [];
       }
 
-      return merged;
-    });
-    items = loaded.items;
+      // 只加载仓库索引，跳过 repo-info-cache 等其它 key
+      const names = filesList.filter((fname) => fname && fname.endsWith("-index"));
+      await loadBatched(names, merged);
+    } else if (cacheKey.includes(",")) {
+      const fileList = cacheKey
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const seen = new Set<string>();
+      const names = fileList.filter((fname) => fname && !fname.includes("..") && !fname.includes("/"));
+      const temp: SearchItem[] = [];
+      await loadBatched(names, temp);
+
+      for (const it of temp) {
+        const key = `${it.repository || ""}|${it.branch || ""}|${it.path || ""}|${it.type || ""}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(it);
+      }
+    } else {
+      const fj = await loadIndexByName(c, cacheKey);
+      if (fj) parseIndexJson(fj, merged);
+    }
+
+    items = merged;
     const tLoad = Date.now();
     const indexCount = new Set(items.map((i) => i.repository)).size;
     const itemsTotal = items.length;
@@ -424,7 +393,7 @@ app.get("/api/search", async (c) => {
     console.log(
       `[search] q=${q} file=${file} mode=${mode} total=${scored.length} ` +
         `tookMs=${tookMs} loadMs=${tLoad - t0} searchMs=${tSearch - tLoad} ` +
-        `cached=${loaded.cached} indexes=${indexCount} items=${itemsTotal} fail=${loadFailCount}`,
+        `indexes=${indexCount} items=${itemsTotal} fail=${loadFailCount}`,
     );
     return c.json({
       results,
@@ -437,10 +406,9 @@ app.get("/api/search", async (c) => {
       tookMs,
       loadMs: tLoad - t0,
       searchMs: tSearch - tLoad,
-      cached: loaded.cached,
     });
   } catch (err) {
-    return c.json({ error: "failed to search", details: String(err) }, 500);
+    return c.json({ error: String(err) }, 500);
   }
 });
 
@@ -454,7 +422,7 @@ app.get("/api/repo-list", async (c) => {
       : [];
     return c.json(names);
   } catch (e) {
-    return c.json({ error: "failed to list keys from repo_index_kv", details: String(e) }, 500);
+    return c.json({ error: String(e) }, 500);
   }
 });
 

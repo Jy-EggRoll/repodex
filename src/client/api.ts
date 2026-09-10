@@ -24,7 +24,7 @@ export interface SearchResult {
 
 export async function fetchRepos(): Promise<RepoInfo[]> {
   const res = await fetch("/api/get-repo-info");
-  if (!res.ok) throw new Error("接口请求失败，请检查权限或网络状态");
+  if (!res.ok) throw new Error(res.statusText || `请求失败 ${res.status}`);
   return res.json();
 }
 
@@ -53,7 +53,6 @@ export interface SearchResponse {
   tookMs: number;
   loadMs: number;
   searchMs: number;
-  cached: boolean;
 }
 
 export interface SearchPerf extends SearchResponse {
