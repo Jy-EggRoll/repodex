@@ -2,6 +2,11 @@
 @import "@cloudflare/kumo/styles/tailwind";
 @import "tailwindcss";
 
+/* 滚动条出现/消失不改变版心宽度，内容零左右挪动 */
+html {
+  scrollbar-gutter: stable;
+}
+
 /* 搜索高亮：纯文字着色（无底色），用 Kumo 文字 token 深浅自适应 */
 mark {
   background-color: transparent;

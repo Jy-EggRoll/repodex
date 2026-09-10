@@ -63,6 +63,26 @@ export default function Search() {
     loadIndexes();
   }, []);
 
+  // "/" 快捷键聚焦搜索框（已在输入框内则不劫持）
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && tag !== "INPUT" && tag !== "TEXTAREA") {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  function clearInput() {
+    if (inputRef.current) {
+      inputRef.current.value = "";
+      inputRef.current.focus();
+    }
+  }
+
   async function doSearch(q: string, list: string[], nameMode: boolean) {
     const v = q.trim();
     if (!v) return;
@@ -157,12 +177,20 @@ export default function Search() {
             <div className="min-w-0 flex-1">
               <Input
                 ref={inputRef}
-                placeholder="输入关键字，回车或点击搜索"
+                placeholder="输入关键字，回车搜索（按 / 聚焦）"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") searchFromInput();
                 }}
               />
             </div>
+            <Button
+              variant="ghost"
+              shape="square"
+              aria-label="清空输入"
+              title="清空输入"
+              icon={<X />}
+              onClick={clearInput}
+            />
             <Button variant="primary" loading={searching} onClick={() => searchFromInput()}>
               搜索
             </Button>

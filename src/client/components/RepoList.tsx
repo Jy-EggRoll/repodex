@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Button, Badge, Banner, Loader, Empty } from "@cloudflare/kumo";
 import { fetchRepos, type RepoInfo } from "../api";
 import { formatRepoSize } from "../format";
-import ResultCard from "./ResultCard";
+import ResultCard, { CardSkeleton } from "./ResultCard";
 
 function riskBadge(risk: RepoInfo["risk"]) {
   if (risk === "danger") return <Badge variant="error">危险</Badge>;
@@ -59,7 +59,14 @@ export default function RepoList() {
       )}
       {!error && !loading && repos.length === 0 && (
         <div className="mt-6">
-          <Empty title="暂无仓库数据" description="点击上方按钮加载" />
+          <Empty title="暂无仓库数据" description="点击刷新重试" />
+        </div>
+      )}
+      {loading && repos.length === 0 && (
+        <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CardSkeleton key={i} />
+          ))}
         </div>
       )}
 

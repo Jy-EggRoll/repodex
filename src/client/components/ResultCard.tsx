@@ -41,3 +41,13 @@ export default function ResultCard({ href, title, titleHtml, subtitle, meta, bad
     </a>
   );
 }
+
+/** 加载占位：与卡片同尺寸的脉冲块，网格内直接复用。 */
+export function CardSkeleton() {
+  return (
+    <div aria-hidden className="border-kumo-line bg-kumo-elevated h-[76px] rounded-lg border p-3">
+      <div className="bg-kumo-fill h-5 w-2/3 animate-pulse rounded" />
+      <div className="bg-kumo-fill mt-2 h-3 w-1/2 animate-pulse rounded" />
+    </div>
+  );
+}
