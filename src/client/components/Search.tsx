@@ -1,6 +1,16 @@
-import { memo, startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Input, Switch, Checkbox, Badge, Dialog, Banner, Loader, Empty } from "@cloudflare/kumo";
+import { memo, startTransition, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Button, Input, Switch, Checkbox, Badge, Dialog, Loader, Empty } from "@cloudflare/kumo";
 import { Bug, X } from "@phosphor-icons/react";
+import {
+  PAGE_SIZE,
+  PAGE_TITLE,
+  RESULT_GRID,
+  SCROLL_MARGIN,
+  SHELL_PADDING,
+  MIN_SEARCH_HEIGHT,
+  DIALOG_MAX_H,
+  staggerDelayMs,
+} from "../ui";
 import {
   ApiError,
   buildFileParam,
@@ -11,8 +21,7 @@ import {
 } from "../api";
 import { formatFileSize } from "../format";
 import ResultCard from "./ResultCard";
-
-const PAGE_SIZE = 100;
+import ErrorNotice from "./ErrorNotice";
 
 function titleHtml(item: SearchResult) {
   if (item.highlightedPath && item.highlightedPath !== "undefined") return item.highlightedPath;
@@ -27,7 +36,7 @@ const ResultRow = memo(function ResultRow({ item, index }: { item: SearchResult;
       titleHtml={titleHtml(item)}
       subtitle={`${item.repository || ""} / ${item.branch || ""} — ${item.path || ""}`}
       meta={formatFileSize(item)}
-      enterDelayMs={Math.min(index % PAGE_SIZE, 11) * 40}
+      enterDelayMs={staggerDelayMs(index % PAGE_SIZE)}
       badge={
         <Badge variant={item.type === "file" ? "info" : "primary"}>
           {item.type === "file" ? "文件" : "文件夹"}
@@ -36,6 +45,15 @@ const ResultRow = memo(function ResultRow({ item, index }: { item: SearchResult;
     />
   );
 });
+
+function LoadingRow({ center = false, children }: { center?: boolean; children: ReactNode }) {
+  return (
+    <div className={`mt-4 flex items-center gap-2 ${center ? "justify-center" : ""}`}>
+      <Loader size="sm" />
+      <span className="text-kumo-subtle text-sm">{children}</span>
+    </div>
+  );
+}
 
 export default function Search() {
   const [byName, setByName] = useState(false);
@@ -188,7 +206,7 @@ export default function Search() {
       (entries) => {
         if (entries.some((en) => en.isIntersecting)) void loadMore();
       },
-      { rootMargin: "400px" },
+      { rootMargin: SCROLL_MARGIN },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -235,9 +253,9 @@ export default function Search() {
 
   return (
     <section>
-      <h1 className="text-kumo-strong mb-4 text-2xl font-bold">仓库文件搜索</h1>
+      <h1 className={PAGE_TITLE}>仓库文件搜索</h1>
 
-      <div className="flex min-h-[56px] items-center gap-4">
+      <div className={`flex ${MIN_SEARCH_HEIGHT} items-center gap-4`}>
         <Switch
           size="sm"
           label="按名称搜索"
@@ -299,7 +317,7 @@ export default function Search() {
                 </Button>
               )}
             />
-            <Dialog size="xl" className="p-4 sm:p-6">
+            <Dialog size="xl" className={SHELL_PADDING}>
               <div className="mb-4 flex items-start justify-between gap-4">
                 <Dialog.Title className="text-xl font-semibold">选择索引</Dialog.Title>
                 <Dialog.Close
@@ -329,7 +347,7 @@ export default function Search() {
                   </Button>
                 </div>
               </div>
-              <div className="bg-kumo-base max-h-[60vh] overflow-auto rounded-lg p-2">
+              <div className={`bg-kumo-base ${DIALOG_MAX_H} overflow-auto rounded-lg p-2`}>
                 {filteredIndexes.length === 0 ? (
                   <div className="text-kumo-subtle p-3 text-sm">无匹配索引</div>
                 ) : (
@@ -362,25 +380,14 @@ export default function Search() {
       </div>
 
       {error && (
-        <div className="mt-4">
-          <Banner
-            variant="error"
-            title={`搜索失败${errorStatus ? `（${errorStatus}）` : ""}`}
-            description={error}
-          />
-          <div className="mt-2">
-            <Button variant="secondary" size="sm" disabled={searching} onClick={() => searchFromInput()}>
-              重试
-            </Button>
-          </div>
-        </div>
+        <ErrorNotice
+          title={`搜索失败${errorStatus ? `（${errorStatus}）` : ""}`}
+          message={error}
+          onRetry={() => searchFromInput()}
+          retryDisabled={searching}
+        />
       )}
-      {searching && (
-        <div className="mt-4 flex items-center gap-2">
-          <Loader size="sm" />
-          <span className="text-kumo-subtle text-sm">搜索中</span>
-        </div>
-      )}
+      {searching && <LoadingRow>搜索中</LoadingRow>}
 
       <div className="mt-6">
         {results === null && !searching && !error && (
@@ -408,7 +415,7 @@ export default function Search() {
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+            <div className={RESULT_GRID}>
               {results.map((item, i) => (
                 <ResultRow
                   key={`${item.repository}-${item.branch}-${item.path}-${item.type}-${i}`}
@@ -419,12 +426,9 @@ export default function Search() {
             </div>
             <div ref={sentinelRef} />
             {loadingMore && (
-              <div className="mt-4 flex items-center justify-center gap-2">
-                <Loader size="sm" />
-                <span className="text-kumo-subtle text-sm">
-                  加载更多（已显示 {results.length} / 共 {total}）
-                </span>
-              </div>
+              <LoadingRow center>
+                加载更多（已显示 {results.length} / 共 {total}）
+              </LoadingRow>
             )}
           </div>
         )}

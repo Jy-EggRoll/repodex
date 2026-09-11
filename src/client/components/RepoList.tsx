@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Badge, Banner, Empty } from "@cloudflare/kumo";
+import { Badge, Empty } from "@cloudflare/kumo";
 import { fetchRepos, type RepoInfo } from "../api";
 import { formatRepoSize } from "../format";
 import ResultCard, { CardSkeleton } from "./ResultCard";
+import ErrorNotice from "./ErrorNotice";
+import { PAGE_TITLE, RESULT_GRID, SKELETON_COUNT, staggerDelayMs } from "../ui";
 
 function riskBadge(risk: RepoInfo["risk"]) {
   if (risk === "danger") return <Badge variant="error">危险</Badge>;
@@ -37,27 +39,23 @@ export default function RepoList() {
 
   return (
     <section>
-      <h1 className="text-kumo-strong mb-4 text-2xl font-bold">GitHub 仓库列表</h1>
+      <h1 className={PAGE_TITLE}>GitHub 仓库列表</h1>
 
-      {error && (
-        <div className="mt-2 w-full">
-          <Banner variant="error" title="加载失败" description={error} />
-        </div>
-      )}
+      {error && <ErrorNotice title="加载失败" message={error} />}
       {!error && !loading && repos.length === 0 && (
         <div className="mt-6">
           <Empty title="暂无仓库数据" description="数据获取中" />
         </div>
       )}
       {loading && repos.length === 0 && (
-        <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className={`mt-6 ${RESULT_GRID}`}>
+          {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
             <CardSkeleton key={i} />
           ))}
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+      <div className={`mt-6 ${RESULT_GRID}`}>
         {repos.map((repo, i) => (
           <ResultCard
             key={repo.html_url}
@@ -66,7 +64,7 @@ export default function RepoList() {
             subtitle={repo.description || ""}
             meta={formatRepoSize(repo)}
             badge={riskBadge(repo.risk)}
-            enterDelayMs={Math.min(i, 11) * 40}
+            enterDelayMs={staggerDelayMs(i)}
           />
         ))}
       </div>

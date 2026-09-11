@@ -1,4 +1,7 @@
 import type { ReactNode } from "react";
+import { CARD_SHELL, CARD_TRANSITION } from "../ui";
+
+const TITLE_CLASS = "text-kumo-strong text-lg leading-tight font-semibold break-all";
 
 interface ResultCardProps {
   href: string;
@@ -28,17 +31,14 @@ export default function ResultCard({
       target="_blank"
       rel="noopener noreferrer"
       style={enterDelayMs ? { animationDelay: `${enterDelayMs}ms` } : undefined}
-      className="border-kumo-line bg-kumo-elevated card-enter block h-full rounded-lg border p-3 transition-all hover:shadow-sm active:scale-[0.99]"
+      className={`card-enter block h-full ${CARD_SHELL} ${CARD_TRANSITION} hover:shadow-sm active:scale-[0.99]`}
     >
       <div className="flex h-full w-full items-start justify-between gap-4">
         <div className="min-w-0 flex-1 text-left">
           {titleHtml !== undefined ? (
-            <div
-              className="text-kumo-strong text-lg leading-tight font-semibold break-all"
-              dangerouslySetInnerHTML={{ __html: titleHtml }}
-            />
+            <div className={TITLE_CLASS} dangerouslySetInnerHTML={{ __html: titleHtml }} />
           ) : (
-            <div className="text-kumo-strong text-lg leading-tight font-semibold break-all">{title}</div>
+            <div className={TITLE_CLASS}>{title}</div>
           )}
           <div className="text-kumo-subtle mt-1 text-xs break-words break-all whitespace-pre-wrap">
             {subtitle}
@@ -56,7 +56,7 @@ export default function ResultCard({
 /** 加载占位：与卡片同尺寸的脉冲块，网格内直接复用。 */
 export function CardSkeleton() {
   return (
-    <div aria-hidden className="border-kumo-line bg-kumo-elevated h-[76px] rounded-lg border p-3">
+    <div aria-hidden className={`${CARD_SHELL} h-[76px]`}>
       <div className="bg-kumo-fill h-5 w-2/3 animate-pulse rounded" />
       <div className="bg-kumo-fill mt-2 h-3 w-1/2 animate-pulse rounded" />
     </div>

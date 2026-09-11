@@ -4,6 +4,7 @@ import { Sun, Moon, Desktop, GithubLogo } from "@phosphor-icons/react";
 import RepoList from "./components/RepoList";
 import Search from "./components/Search";
 import { loadSetting, applyTheme, subscribeSystem, type ThemeSetting } from "./theme";
+import { CONTENT_MAX_W, SHELL_PADDING, PANEL, HEADER_SHADOW, CONTENT_SHADOW } from "./ui";
 
 const THEME_META: Record<ThemeSetting, { icon: typeof Sun; label: string }> = {
   auto: { icon: Desktop, label: "跟随系统" },
@@ -56,9 +57,11 @@ export default function App() {
           演示模式：数据为虚构样例，搜索逻辑与正式版一致
         </div>
       )}
-      <div className="mx-auto max-w-5xl p-4 sm:p-6 xl:max-w-7xl">
+      <div className={`mx-auto ${CONTENT_MAX_W}`}>
         {/* 不加 z-index：Kumo 弹框靠 body 末尾 portal 压住页面，有 z-index 反而会盖住弹框 */}
-        <div className="bg-kumo-base sticky top-4 mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 shadow-sm">
+        <div
+          className={`${PANEL} sticky top-4 mb-6 flex flex-wrap items-center justify-between gap-2 px-4 py-3 ${HEADER_SHADOW}`}
+        >
           <div className="flex items-center gap-1">
             <button
               className="text-kumo-strong px-2 text-lg font-semibold sm:text-xl"
@@ -114,7 +117,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="bg-kumo-base rounded-xl p-4 shadow-md sm:p-6">
+        <div className={`${PANEL} ${SHELL_PADDING} ${CONTENT_SHADOW}`}>
           {tab === "repos" ? <RepoList /> : <Search />}
         </div>
 
