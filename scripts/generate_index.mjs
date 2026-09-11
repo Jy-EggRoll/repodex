@@ -11,6 +11,7 @@
 const GH_API = "https://api.github.com";
 const CF_API = "https://api.cloudflare.com/client/v4";
 const SHA_TABLE_KEY = "__meta-sha-table";
+const REPO_INFO_CACHE_KEY = "repo-info-cache";
 
 // 终端颜色：只走 stderr（控制台日志），stdout 专供 Summary 纯净 markdown
 const paint = (code) => (s) => (process.env.NO_COLOR === "1" ? s : `\x1b[${code}m${s}\x1b[0m`);
@@ -160,6 +161,25 @@ export function buildBranch(branchName, entries) {
   return { branch_name: branchName, files, directories };
 }
 
+/** 仓库列表转 RepoInfo：与 Worker 旧 getAllRepos 输出形状一致，不过滤（归档也保留）。 */
+export function buildRepoInfo(repos) {
+  const infos = [];
+  for (const repo of repos ?? []) {
+    if (!repo || typeof repo.name !== "string" || !repo.name) continue;
+    const sizeKb = Number(repo.size) || 0;
+    const sizeMb = Math.round((sizeKb / 1024) * 100) / 100;
+    infos.push({
+      name: repo.name,
+      size: sizeKb,
+      size_mb: sizeMb,
+      risk: sizeMb < 800 ? "safe" : sizeMb <= 900 ? "warn" : "danger",
+      description: repo.description ?? null,
+      html_url: repo.html_url ?? "",
+    });
+  }
+  return infos;
+}
+
 async function main() {
   const { readFile } = await import("node:fs/promises");
   const { fileURLToPath } = await import("node:url");
@@ -269,6 +289,22 @@ async function main() {
   }
 
   if (!dryRun) await cfKvPut(cfAccount, cfNamespace, cfToken, SHA_TABLE_KEY, shaTable, dryRun);
+
+  // 仓库列表快照：全量同步时覆盖，不过滤（与旧 Worker 直查行为一致）；手动单仓补跑时跳过防误删
+  if (only.size === 0) {
+    const repoInfos = buildRepoInfo(repos);
+    await cfKvPut(
+      cfAccount,
+      cfNamespace,
+      cfToken,
+      REPO_INFO_CACHE_KEY,
+      { data: repoInfos, timestamp: Date.now() },
+      dryRun,
+    );
+    say(green(`✓ 仓库列表已更新（${repoInfos.length} 个）`));
+  } else {
+    say(gray("→ 单仓补跑跳过仓库列表更新"));
+  }
 
   const seconds = Math.round((Date.now() - startedAt) / 1000);
   say(

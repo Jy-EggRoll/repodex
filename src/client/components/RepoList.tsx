@@ -29,7 +29,7 @@ export default function RepoList() {
     }
   }
 
-  // 首屏自动加载（服务端 5 分钟缓存，成本可忽略），按钮保留作刷新
+  // 首屏自动加载（每小时快照，成本可忽略），按钮保留作刷新
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps

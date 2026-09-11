@@ -59,7 +59,7 @@ weight: 1
 
 ## 部署指南
 
-只需一个 Cloudflare 账号（无需绑卡），按下面 5 步走完即上线。全部密钥共 7 个，先总览（细则见各步）：
+只需一个 Cloudflare 账号（无需绑卡），按下面 5 步走完即上线。全部密钥共 6 个，先总览（细则见各步）：
 
 | Secret            | 配在哪里                 | 用途                                   |
 | ----------------- | ------------------------ | -------------------------------------- |
@@ -68,7 +68,6 @@ weight: 1
 | `CF_API_TOKEN`    | 本仓库 Actions Secrets   | 写 KV（需 Workers KV Storage 写权限）  |
 | `REPOS_PAT`       | 本仓库 Actions Secrets   | 中央索引读取仓库文件树（细粒度，只读） |
 | `USER` / `PSWD`   | Workers 变量（选“密钥”） | 站点登录                               |
-| `REPO_INFO_TOKEN` | Workers 变量（选“密钥”） | 后端列出你的仓库                       |
 
 ### 1. Fork 与绑定
 
@@ -102,10 +101,9 @@ weight: 1
 >
 > 令牌泄露风险极大，务必妥善保护！
 
-### 3. GitHub 侧两个 Token（分工不同，都要建）
+### 3. GitHub 侧一个 Token
 
-- **`REPO_INFO_TOKEN`**（经典 token，repo 全权限）：给 Worker 后端调 GitHub API 列出你的仓库（含私有）。地址：<https://github.com/settings/tokens>，可设永不过期，妥善保存。
-- **`REPOS_PAT`**（细粒度 token，只开 Contents 只读 + Metadata 只读，Repository access 选 All repositories，覆盖未来新仓库）：给中央索引读取各仓库文件树。地址：<https://github.com/settings/personal-access-tokens/new>。注意：Actions 默认 `GITHUB_TOKEN` 只能读本仓库，跨仓读取必须配此项。
+- **`REPOS_PAT`**（细粒度 token，只开 Contents 只读 + Metadata 只读，Repository access 选 All repositories，覆盖未来新仓库）：给中央索引读取各仓库文件树，并顺手生成仓库列表快照（含私有）。地址：<https://github.com/settings/personal-access-tokens/new>。注意：Actions 默认 `GITHUB_TOKEN` 只能读本仓库，跨仓读取必须配此项。
 
 > [!CAUTION]
 >
@@ -124,9 +122,9 @@ weight: 1
 
 ![Cloudflare-机密位置](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-8.png)
 
-在 Workers → Settings → Variables 添加（类型选“密钥”）：`USER`（登录用户名）、`PSWD`（登录密码）、`REPO_INFO_TOKEN`（上一步的经典 token）。保存后点部署。
+在 Workers → Settings → Variables 添加（类型选“密钥”）：`USER`（登录用户名）、`PSWD`（登录密码）。保存后点部署。
 
-上线验证清单：① 首页能打开并登录 ② 搜关键词出结果 ③ 索引数与仓库数对得上。新仓库会被自动发现，无需重新部署。
+上线验证清单：① 首页能打开并登录 ② 搜关键词出结果 ③ 索引数与仓库数对得上。新仓库会被自动发现，无需重新部署。注意仓库列表为每小时快照（非实时），改名/新增后需等下一次同步。
 
 ## 项目优点速览
 
@@ -144,7 +142,7 @@ weight: 1
 
 每小时整点（或手动触发）扫描名下所有仓库，对比 KV 中记录的分支 SHA，只对有变化的仓库拉取文件树、生成统一的全局索引并推送至 Cloudflare KV 存储，同时清理已删除仓库的僵尸索引。
 
-KV 中的 key 布局：`{仓库短名}-index`（仓库索引）、`repo-info-cache`（仓库列表缓存，10 分钟过期）、`__meta-sha-table`（分支 SHA 记录表，变化检测用，均非 bug）。
+KV 中的 key 布局：`{仓库短名}-index`（仓库索引）、`repo-info-cache`（仓库列表快照，每小时由中央索引覆盖，Worker 只读）、`__meta-sha-table`（分支 SHA 记录表，变化检测用，均非 bug）。
 
 ## 本地开发与工程化
 

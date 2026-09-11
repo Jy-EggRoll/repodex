@@ -6,14 +6,12 @@ import { search as tseSearch } from "text-search-engine";
 import { chunk } from "./batch";
 import { buildHighlighted } from "./highlight";
 import { compareRank, rankKeyFromRanges, type RankKey } from "./rank";
-import { riskForSize } from "./risk";
 
 type Bindings = {
   public_assets: Fetcher;
   repo_index_kv: KVNamespace;
   USER: string;
   PSWD: string;
-  REPO_INFO_TOKEN: string;
 };
 
 interface IndexFile {
@@ -116,36 +114,6 @@ async function loadIndexByName(c: any, name: string): Promise<IndexJson | null> 
   return null;
 }
 
-async function getAllRepos(token: string): Promise<RepoInfo[]> {
-  // 按需加载：octokit 只给仓库列表页用，不污染搜索路径冷启动
-  const { Octokit } = await import("octokit");
-  const octokit = new Octokit({
-    auth: token,
-    request: { timeout: 10000 },
-  });
-  const repos: RepoInfo[] = [];
-  let page = 1;
-  const perPage = 100;
-  while (true) {
-    const response = await octokit.request("GET /user/repos", { type: "all", per_page: perPage, page });
-    if (response.data.length === 0) break;
-    for (const item of response.data) {
-      const size_kb = Number(item.size) || 0;
-      const size_mb = Math.round((size_kb / 1024) * 100) / 100;
-      repos.push({
-        name: item.name,
-        size: size_kb,
-        size_mb,
-        risk: riskForSize(size_mb),
-        description: item.description,
-        html_url: item.html_url,
-      });
-    }
-    page++;
-  }
-  return repos;
-}
-
 const secrets = env as unknown as Bindings;
 
 app.use(
@@ -158,38 +126,18 @@ app.use(
 
 app.get("/api/get-repo-info", async (c) => {
   const CACHE_KEY = "repo-info-cache";
-  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-  // Try to get from cache first
+  // 中央索引每小时预写快照，Worker 只读 KV（无 GitHub token）
   try {
     const cached = (await c.env.repo_index_kv.get(CACHE_KEY, { type: "json" })) as RepoInfoCache | null;
-    if (cached && Array.isArray(cached.data) && Date.now() - cached.timestamp < CACHE_TTL) {
+    if (cached && Array.isArray(cached.data)) {
       return c.json(cached.data);
     }
   } catch (e) {
-    // Cache miss or error, continue to fetch from GitHub
+    // KV 读取失败，走下方 503
   }
 
-  // Fetch from GitHub API
-  const filterRepos = await getAllRepos(
-    (c.env as unknown as Bindings).REPO_INFO_TOKEN ?? secrets.REPO_INFO_TOKEN,
-  );
-
-  // Save to cache
-  try {
-    await c.env.repo_index_kv.put(
-      CACHE_KEY,
-      JSON.stringify({
-        data: filterRepos,
-        timestamp: Date.now(),
-      } as RepoInfoCache),
-      { expirationTtl: 600 },
-    ); // 10 minutes expiration as backup
-  } catch (e) {
-    // Cache write failed, but we can still return the data
-  }
-
-  return c.json(filterRepos);
+  return c.json({ error: "index not ready, run Central Repository Index workflow first" }, 503);
 });
 
 app.get("/api/search", async (c) => {
