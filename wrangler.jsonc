@@ -11,8 +11,6 @@
   "kv_namespaces": [
     {
       "binding": "repo_index_kv",
-      "id": "48dee98bdd2846aa8f79f6cf0562916e",
-      "remote": true, // 始终使用远程 KV 数据库（本地开发时有用）
     },
   ],
 }
