@@ -20,13 +20,14 @@ function titleHtml(item: SearchResult) {
   return item.name || "";
 }
 
-const ResultRow = memo(function ResultRow({ item }: { item: SearchResult }) {
+const ResultRow = memo(function ResultRow({ item, index }: { item: SearchResult; index: number }) {
   return (
     <ResultCard
       href={item.github_url || "#"}
       titleHtml={titleHtml(item)}
       subtitle={`${item.repository || ""} / ${item.branch || ""} — ${item.path || ""}`}
       meta={formatFileSize(item)}
+      enterDelayMs={Math.min(index % PAGE_SIZE, 11) * 40}
       badge={
         <Badge variant={item.type === "file" ? "info" : "primary"}>
           {item.type === "file" ? "文件" : "文件夹"}
@@ -412,6 +413,7 @@ export default function Search() {
                 <ResultRow
                   key={`${item.repository}-${item.branch}-${item.path}-${item.type}-${i}`}
                   item={item}
+                  index={i}
                 />
               ))}
             </div>

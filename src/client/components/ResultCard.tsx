@@ -9,15 +9,26 @@ interface ResultCardProps {
   subtitle: string;
   meta: string;
   badge: ReactNode;
+  /** 进入动画延迟（ms），列表按下标错峰传入；缺省无延迟 */
+  enterDelayMs?: number;
 }
 
-export default function ResultCard({ href, title, titleHtml, subtitle, meta, badge }: ResultCardProps) {
+export default function ResultCard({
+  href,
+  title,
+  titleHtml,
+  subtitle,
+  meta,
+  badge,
+  enterDelayMs,
+}: ResultCardProps) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="border-kumo-line bg-kumo-elevated block h-full rounded-lg border p-3 transition-all hover:shadow-sm active:scale-[0.99]"
+      style={enterDelayMs ? { animationDelay: `${enterDelayMs}ms` } : undefined}
+      className="border-kumo-line bg-kumo-elevated card-enter block h-full rounded-lg border p-3 transition-all hover:shadow-sm active:scale-[0.99]"
     >
       <div className="flex h-full w-full items-start justify-between gap-4">
         <div className="min-w-0 flex-1 text-left">

@@ -1,6 +1,7 @@
 @source "../../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
 @import "@cloudflare/kumo/styles/tailwind";
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /* 滚动条出现/消失不改变版心宽度，内容零左右挪动 */
 html {
@@ -12,4 +13,65 @@ mark {
   background-color: transparent;
   color: var(--text-color-kumo-info);
   font-weight: 600;
+}
+
+/* 主题切换图标过渡：随主题变更重挂载时淡入 + 缩放 + 轻旋转 */
+@keyframes theme-icon-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-30deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.theme-icon-swap {
+  animation: theme-icon-in 0.25s ease-out;
+}
+
+/* 主题下拉面板唤出：挂载即播（每次打开重新挂载），淡入 + 缩放 + 下沉浮现 */
+@keyframes theme-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.theme-menu-pop {
+  transform-origin: top right;
+  animation: theme-menu-in 0.18s ease-out;
+}
+
+/* 卡片进入：淡入 + 上浮 + 轻缩放；配合行内 animation-delay 做列表错峰 */
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.card-enter {
+  animation: card-in 0.3s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-icon-swap {
+    animation: none;
+  }
+  .theme-menu-pop {
+    animation: none;
+  }
+  .card-enter {
+    animation: none;
+  }
 }

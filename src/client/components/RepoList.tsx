@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Badge, Banner, Loader, Empty } from "@cloudflare/kumo";
+import { Badge, Banner, Empty } from "@cloudflare/kumo";
 import { fetchRepos, type RepoInfo } from "../api";
 import { formatRepoSize } from "../format";
 import ResultCard, { CardSkeleton } from "./ResultCard";
@@ -29,7 +29,7 @@ export default function RepoList() {
     }
   }
 
-  // 首屏自动加载（每小时快照，成本可忽略），按钮保留作刷新
+  // 首屏自动加载（中央索引每小时预写快照）
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -38,19 +38,6 @@ export default function RepoList() {
   return (
     <section>
       <h1 className="text-kumo-strong mb-4 text-2xl font-bold">GitHub 仓库列表</h1>
-      <div className="flex min-h-[56px] flex-col items-start gap-3 sm:flex-row sm:items-center">
-        <div className="flex w-full items-center gap-3 sm:w-auto">
-          <Button variant="primary" loading={loading} disabled={loading} onClick={load}>
-            刷新仓库数据
-          </Button>
-          {loading && (
-            <span className="flex items-center gap-2">
-              <Loader size="sm" />
-              <span className="text-kumo-subtle text-sm">加载中</span>
-            </span>
-          )}
-        </div>
-      </div>
 
       {error && (
         <div className="mt-2 w-full">
@@ -59,7 +46,7 @@ export default function RepoList() {
       )}
       {!error && !loading && repos.length === 0 && (
         <div className="mt-6">
-          <Empty title="暂无仓库数据" description="点击刷新重试" />
+          <Empty title="暂无仓库数据" description="数据获取中" />
         </div>
       )}
       {loading && repos.length === 0 && (
@@ -71,7 +58,7 @@ export default function RepoList() {
       )}
 
       <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-        {repos.map((repo) => (
+        {repos.map((repo, i) => (
           <ResultCard
             key={repo.html_url}
             href={repo.html_url}
@@ -79,6 +66,7 @@ export default function RepoList() {
             subtitle={repo.description || ""}
             meta={formatRepoSize(repo)}
             badge={riskBadge(repo.risk)}
+            enterDelayMs={Math.min(i, 11) * 40}
           />
         ))}
       </div>

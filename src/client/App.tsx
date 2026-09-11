@@ -21,8 +21,9 @@ function ThemeMenuItem({
   onSelect: (v: ThemeSetting) => void;
 }) {
   const { icon: Icon, label } = THEME_META[value];
+  // 传组件引用（非 <Icon /> 元素），Kumo 才会自动注入 mr-2 h-4 w-4 解决图标文字间距
   return (
-    <DropdownMenu.Item icon={<Icon />} selected={value === current} onClick={() => onSelect(value)}>
+    <DropdownMenu.Item icon={Icon} selected={value === current} onClick={() => onSelect(value)}>
       {label}
     </DropdownMenu.Item>
   );
@@ -96,11 +97,15 @@ export default function App() {
                     shape="square"
                     aria-label={`切换主题（当前：${THEME_META[setting].label}）`}
                     title={THEME_META[setting].label}
-                    icon={<ThemeIcon />}
+                    icon={
+                      <span key={setting} className="theme-icon-swap flex items-center">
+                        <ThemeIcon />
+                      </span>
+                    }
                   />
                 )}
               />
-              <DropdownMenu.Content>
+              <DropdownMenu.Content className="theme-menu-pop">
                 {(Object.keys(THEME_META) as ThemeSetting[]).map((v) => (
                   <ThemeMenuItem key={v} value={v} current={setting} onSelect={selectTheme} />
                 ))}
