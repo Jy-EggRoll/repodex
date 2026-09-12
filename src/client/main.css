@@ -70,8 +70,10 @@ mark {
   }
 }
 
+/* fill-mode 用 backwards 而非 both：both 会永久保留末帧 transform，
+   使卡片成为常驻层叠上下文，滚动时盖住吸顶顶栏并拦截点击 */
 .card-enter {
-  animation: card-in var(--motion-slow) var(--motion-ease) both;
+  animation: card-in var(--motion-slow) var(--motion-ease) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
