@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Badge, Empty } from "@cloudflare/kumo";
+import { useEffect, useMemo, useState } from "react";
+import { Badge, Empty, Input } from "@cloudflare/kumo";
 import { fetchRepos, type RepoInfo } from "../api";
 import { formatRepoSize } from "../format";
 import ResultCard, { CardSkeleton } from "./ResultCard";
@@ -16,6 +16,15 @@ export default function RepoList() {
   const [repos, setRepos] = useState<RepoInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [filter, setFilter] = useState("");
+
+  const filteredRepos = useMemo(() => {
+    const kw = filter.trim().toLowerCase();
+    if (!kw) return repos;
+    return repos.filter(
+      (r) => r.name.toLowerCase().includes(kw) || (r.description ?? "").toLowerCase().includes(kw),
+    );
+  }, [repos, filter]);
 
   async function load() {
     setLoading(true);
@@ -41,6 +50,16 @@ export default function RepoList() {
     <section>
       <h1 className={PAGE_TITLE}>GitHub 仓库列表</h1>
 
+      <div className="mb-4">
+        <Input
+          aria-label="筛选仓库"
+          placeholder="筛选仓库（名称或描述）…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="w-full"
+        />
+      </div>
+
       {error && <ErrorNotice title="加载失败" message={error} />}
       {!error && !loading && repos.length === 0 && (
         <div className="mt-6">
@@ -55,8 +74,12 @@ export default function RepoList() {
         </div>
       )}
 
+      {!error && !loading && repos.length > 0 && filteredRepos.length === 0 && (
+        <div className="text-kumo-subtle mt-6 text-sm">无匹配仓库</div>
+      )}
+
       <div className={`mt-6 ${RESULT_GRID}`}>
-        {repos.map((repo, i) => (
+        {filteredRepos.map((repo, i) => (
           <ResultCard
             key={repo.html_url}
             href={repo.html_url}
