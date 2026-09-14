@@ -15,6 +15,11 @@ mark {
   font-weight: 600;
 }
 
+/* Header tabs: two fixed labels always fit; hide the decorative overflow chevrons (they can go stale after a language switch) */
+.header-tabs [data-kumo-part="overflow-control"] {
+  display: none;
+}
+
 /* Animation duration and easing tokens */
 :root {
   --motion-fast: 0.18s;

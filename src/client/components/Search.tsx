@@ -274,51 +274,20 @@ export default function Search() {
       </div>
 
       <div className="mt-2">
-        <label className="text-kumo-strong mb-2 block font-medium">
-          {t("Search (defaults to all indexes)")}
-        </label>
-        <div className="flex flex-col gap-2 md:flex-row md:items-center">
-          <div className="flex w-full flex-1 gap-2">
-            <div className="min-w-0 flex-1">
-              <Input
-                ref={inputRef}
-                placeholder={t("Type keywords, press Enter or click Search (press / to focus)")}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !searching) searchFromInput();
-                }}
-              />
-            </div>
-            <Button
-              variant="ghost"
-              shape="square"
-              aria-label={t("Clear input")}
-              title={t("Clear input")}
-              icon={<X />}
-              onClick={clearInput}
-            />
-            <Button
-              variant="primary"
-              loading={searching}
-              disabled={searching}
-              onClick={() => searchFromInput()}
-            >
-              {t("Search")}
-            </Button>
-            <Button
-              variant={debug ? "primary" : "ghost"}
-              shape="square"
-              aria-label={t("Debug mode")}
-              aria-pressed={debug}
-              title={t("Debug mode: show detailed performance info")}
-              icon={<Bug />}
-              onClick={toggleDebug}
-            />
-          </div>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <label className="text-kumo-strong font-medium">{t("Search (defaults to all indexes)")}</label>
           <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
             <Dialog.Trigger
               render={(p) => (
                 <Button {...p} variant="outline">
-                  {t("Select indexes")} <span className="text-kumo-subtle ml-2 text-sm">{countLabel}</span>
+                  {t("Select indexes")}
+                  <span className="text-kumo-subtle ml-2 grid text-sm tabular-nums">
+                    <span className="invisible col-start-1 row-start-1">{t("(loading indexes)")}</span>
+                    <span className="invisible col-start-1 row-start-1">
+                      {t("({0} selected)", { 0: 9999 })}
+                    </span>
+                    <span className="col-start-1 row-start-1">{countLabel}</span>
+                  </span>
                 </Button>
               )}
             />
@@ -387,6 +356,42 @@ export default function Search() {
               </div>
             </Dialog>
           </Dialog.Root>
+        </div>
+        <div className="flex w-full gap-2">
+          <div className="min-w-0 flex-1">
+            <Input
+              ref={inputRef}
+              placeholder={t("Type keywords, press Enter or click Search (press / to focus)")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !searching) searchFromInput();
+              }}
+            />
+          </div>
+          <Button
+            variant="ghost"
+            shape="square"
+            aria-label={t("Clear input")}
+            title={t("Clear input")}
+            icon={<X />}
+            onClick={clearInput}
+          />
+          <Button
+            variant="primary"
+            loading={searching}
+            disabled={searching}
+            onClick={() => searchFromInput()}
+          >
+            {t("Search")}
+          </Button>
+          <Button
+            variant={debug ? "primary" : "ghost"}
+            shape="square"
+            aria-label={t("Debug mode")}
+            aria-pressed={debug}
+            title={t("Debug mode: show detailed performance info")}
+            icon={<Bug />}
+            onClick={toggleDebug}
+          />
         </div>
       </div>
 
