@@ -1,17 +1,18 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="kumo" data-mode="light">
+<html lang="en" data-theme="kumo" data-mode="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RepoDex – 仓库信息与文件搜索</title>
+    <title>RepoDex – Repository info and file search</title>
     <meta
       name="description"
-      content="RepoDex：跨仓库、跨分支的 GitHub 文件模糊搜索，支持拼音与中文文件名。"
+      content="RepoDex: fuzzy file search across GitHub repositories and branches, with pinyin and Chinese filename support."
     />
     <meta name="theme-color" content="#f5f5f5" />
     <link rel="icon" href="/favicon.ico" />
     <script>
-      // 首绘前定主题，防闪白：记忆值 > 系统偏好
+      // Set theme and language before first paint to avoid flashes.
+      // Theme: stored value > system preference. Language: stored "lang" > navigator.
       try {
         var s = localStorage.getItem("theme");
         var m =
@@ -22,6 +23,9 @@
               : "light";
         document.documentElement.setAttribute("data-theme", "kumo");
         document.documentElement.setAttribute("data-mode", m);
+        var l = localStorage.getItem("lang");
+        if (l !== "en" && l !== "zh-cn") l = /^zh/i.test(navigator.language || "") ? "zh-cn" : "en";
+        document.documentElement.setAttribute("lang", l === "zh-cn" ? "zh-CN" : "en");
       } catch (e) {}
     </script>
   </head>

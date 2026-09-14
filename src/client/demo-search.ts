@@ -6,6 +6,7 @@ import { compareRank, rankKeyFromRanges, type RankKey } from "../rank";
 import { riskForSize } from "../risk";
 import type { RepoInfo, SearchResponse, SearchResult } from "./api";
 import { buildDemoCorpus } from "./demo-corpus";
+import { t } from "./i18n";
 
 const DEMO_GITHUB = "https://github.com/Jy-EggRoll/repodex";
 
@@ -21,7 +22,7 @@ export function listRepos(): RepoInfo[] {
       size: r.sizeKb,
       size_mb,
       risk: riskForSize(size_mb),
-      description: "演示数据，非真实仓库",
+      description: t("Demo data, not a real repository"),
       html_url: DEMO_GITHUB,
     };
   });

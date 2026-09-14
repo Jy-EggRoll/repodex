@@ -1,4 +1,5 @@
 import { memo, startTransition, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Button, Input, Switch, Checkbox, Badge, Dialog, Loader, Empty } from "@cloudflare/kumo";
 import { Bug, X } from "@phosphor-icons/react";
 import {
@@ -30,6 +31,7 @@ function titleHtml(item: SearchResult) {
 }
 
 const ResultRow = memo(function ResultRow({ item, index }: { item: SearchResult; index: number }) {
+  const { t } = useTranslation();
   return (
     <ResultCard
       href={item.github_url || "#"}
@@ -39,7 +41,7 @@ const ResultRow = memo(function ResultRow({ item, index }: { item: SearchResult;
       enterDelayMs={staggerDelayMs(index % PAGE_SIZE)}
       badge={
         <Badge variant={item.type === "file" ? "info" : "primary"}>
-          {item.type === "file" ? "文件" : "文件夹"}
+          {item.type === "file" ? t("File") : t("Folder")}
         </Badge>
       }
     />
@@ -56,6 +58,7 @@ function LoadingRow({ center = false, children }: { center?: boolean; children: 
 }
 
 export default function Search() {
+  const { t } = useTranslation();
   const [byName, setByName] = useState(false);
   const [indexes, setIndexes] = useState<string[]>([]);
   const [checked, setChecked] = useState<string[]>([]);
@@ -246,19 +249,19 @@ export default function Search() {
   }
 
   const countLabel = loadingIndexes
-    ? "（请求索引中）"
+    ? t("(loading indexes)")
     : checked.length === 0
-      ? "（未选择）"
-      : `（${checked.length} 已选）`;
+      ? t("(none selected)")
+      : t("({0} selected)", { 0: checked.length });
 
   return (
     <section>
-      <h1 className={PAGE_TITLE}>仓库文件搜索</h1>
+      <h1 className={PAGE_TITLE}>{t("Repository file search")}</h1>
 
       <div className={`flex ${MIN_SEARCH_HEIGHT} items-center gap-4`}>
         <Switch
           size="sm"
-          label="按名称搜索"
+          label={t("Search by name")}
           checked={byName}
           disabled={searching}
           onClick={() => {
@@ -267,17 +270,19 @@ export default function Search() {
             searchFromInput(checked, next);
           }}
         />
-        <span className="text-kumo-subtle text-xs">（默认按路径搜索）</span>
+        <span className="text-kumo-subtle text-xs">{t("(path search by default)")}</span>
       </div>
 
       <div className="mt-2">
-        <label className="text-kumo-strong mb-2 block font-medium">搜索（默认在所有索引中搜索）</label>
+        <label className="text-kumo-strong mb-2 block font-medium">
+          {t("Search (defaults to all indexes)")}
+        </label>
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
           <div className="flex w-full flex-1 gap-2">
             <div className="min-w-0 flex-1">
               <Input
                 ref={inputRef}
-                placeholder="输入关键字，回车或点击搜索（按 / 聚焦）"
+                placeholder={t("Type keywords, press Enter or click Search (press / to focus)")}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !searching) searchFromInput();
                 }}
@@ -286,8 +291,8 @@ export default function Search() {
             <Button
               variant="ghost"
               shape="square"
-              aria-label="清空输入"
-              title="清空输入"
+              aria-label={t("Clear input")}
+              title={t("Clear input")}
               icon={<X />}
               onClick={clearInput}
             />
@@ -297,14 +302,14 @@ export default function Search() {
               disabled={searching}
               onClick={() => searchFromInput()}
             >
-              搜索
+              {t("Search")}
             </Button>
             <Button
               variant={debug ? "primary" : "ghost"}
               shape="square"
-              aria-label="调试模式"
+              aria-label={t("Debug mode")}
               aria-pressed={debug}
-              title="调试模式：显示详细性能信息"
+              title={t("Debug mode: show detailed performance info")}
               icon={<Bug />}
               onClick={toggleDebug}
             />
@@ -313,43 +318,49 @@ export default function Search() {
             <Dialog.Trigger
               render={(p) => (
                 <Button {...p} variant="outline">
-                  选择索引 <span className="text-kumo-subtle ml-2 text-sm">{countLabel}</span>
+                  {t("Select indexes")} <span className="text-kumo-subtle ml-2 text-sm">{countLabel}</span>
                 </Button>
               )}
             />
             <Dialog size="xl" className={SHELL_PADDING}>
               <div className="mb-4 flex items-start justify-between gap-4">
-                <Dialog.Title className="text-xl font-semibold">选择索引</Dialog.Title>
+                <Dialog.Title className="text-xl font-semibold">{t("Select indexes")}</Dialog.Title>
                 <Dialog.Close
-                  aria-label="Close"
+                  aria-label={t("Close")}
                   render={(props) => (
-                    <Button {...props} variant="secondary" shape="square" icon={<X />} aria-label="Close" />
+                    <Button
+                      {...props}
+                      variant="secondary"
+                      shape="square"
+                      icon={<X />}
+                      aria-label={t("Close")}
+                    />
                   )}
                 />
               </div>
               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
                   <Input
-                    placeholder="筛选索引…"
+                    placeholder={t("Filter indexes…")}
                     value={indexFilter}
                     onChange={(e) => setIndexFilter(e.target.value)}
                   />
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <Button variant="secondary" size="sm" disabled={searching} onClick={selectAll}>
-                    全选
+                    {t("Select all")}
                   </Button>
                   <Button variant="secondary" size="sm" disabled={searching} onClick={invertSelection}>
-                    反选
+                    {t("Invert selection")}
                   </Button>
                   <Button variant="secondary" size="sm" disabled={searching} onClick={clearAll}>
-                    清除
+                    {t("Clear")}
                   </Button>
                 </div>
               </div>
               <div className={`bg-kumo-base ${DIALOG_MAX_H} overflow-auto rounded-lg p-2`}>
                 {filteredIndexes.length === 0 ? (
-                  <div className="text-kumo-subtle p-3 text-sm">无匹配索引</div>
+                  <div className="text-kumo-subtle p-3 text-sm">{t("No matching indexes")}</div>
                 ) : (
                   <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
                     {filteredIndexes.map((fname) => (
@@ -369,7 +380,7 @@ export default function Search() {
                 <Dialog.Close
                   render={(props) => (
                     <Button variant="primary" {...props}>
-                      完成
+                      {t("Done")}
                     </Button>
                   )}
                 />
@@ -381,37 +392,59 @@ export default function Search() {
 
       {error && (
         <ErrorNotice
-          title={`搜索失败${errorStatus ? `（${errorStatus}）` : ""}`}
+          title={errorStatus ? t("Search failed ({0})", { 0: errorStatus }) : t("Search failed")}
           message={error}
           onRetry={() => searchFromInput()}
           retryDisabled={searching}
         />
       )}
-      {searching && <LoadingRow>搜索中</LoadingRow>}
+      {searching && <LoadingRow>{t("Searching")}</LoadingRow>}
 
       <div className="mt-6">
         {results === null && !searching && !error && (
-          <Empty title="输入关键词开始搜索" description="回车或点击搜索按钮，可按名称或路径匹配" />
+          <Empty
+            title={t("Type a keyword to start searching")}
+            description={t("Press Enter or click the search button; match by name or path")}
+          />
         )}
         {results !== null && results.length === 0 && !searching && (
-          <Empty title="未找到匹配" description="换个关键字或调整索引选择试试" />
+          <Empty
+            title={t("No matches found")}
+            description={t("Try another keyword or adjust the index selection")}
+          />
         )}
         {results !== null && results.length > 0 && (
           <div>
             <h2 className="text-kumo-strong mb-2 text-lg font-semibold">
-              匹配结果（共 {total}
-              {perf?.truncated ? "+" : ""} 条 · {fileCount} 个文件 / {dirCount} 个文件夹）
+              {t("Results ({0}{1} total · {2} files / {3} folders)", {
+                0: total,
+                1: perf?.truncated ? "+" : "",
+                2: fileCount,
+                3: dirCount,
+              })}
             </h2>
             {debug && perf && (
               <div className="border-kumo-line bg-kumo-base mb-3 rounded-lg border p-3 font-mono text-xs">
                 <div className="text-kumo-subtle">
-                  服务端 {perf.tookMs}ms（取数 {perf.loadMs} / 匹配 {perf.searchMs}）
+                  {t("Server {0}ms (fetch {1} / match {2})", {
+                    0: perf.tookMs,
+                    1: perf.loadMs,
+                    2: perf.searchMs,
+                  })}
                 </div>
                 <div className="text-kumo-subtle mt-1">
-                  网络来回 {perf.roundTripMs}ms · 返回 {results.length}/{total}
+                  {t("Network round trip {0}ms · returned {1}/{2}", {
+                    0: perf.roundTripMs,
+                    1: results.length,
+                    2: total,
+                  })}
                 </div>
                 <div className="text-kumo-subtle mt-1">
-                  索引 {perf.indexCount} 个 · 语料 {perf.itemsTotal} 条 · 加载失败 {perf.loadFailCount}
+                  {t("Indexes {0} · items {1} · load failures {2}", {
+                    0: perf.indexCount,
+                    1: perf.itemsTotal,
+                    2: perf.loadFailCount,
+                  })}
                 </div>
               </div>
             )}
@@ -427,7 +460,7 @@ export default function Search() {
             <div ref={sentinelRef} />
             {loadingMore && (
               <LoadingRow center>
-                加载更多（已显示 {results.length} / 共 {total}）
+                {t("Loading more (showing {0} / {1} total)", { 0: results.length, 1: total })}
               </LoadingRow>
             )}
           </div>

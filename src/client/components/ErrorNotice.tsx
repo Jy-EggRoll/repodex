@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Banner, Button } from "@cloudflare/kumo";
 
 interface ErrorNoticeProps {
@@ -9,13 +10,14 @@ interface ErrorNoticeProps {
 }
 
 export default function ErrorNotice({ title, message, onRetry, retryDisabled }: ErrorNoticeProps) {
+  const { t } = useTranslation();
   return (
     <div className="mt-4">
       <Banner variant="error" title={title} description={message} />
       {onRetry && (
         <div className="mt-2">
           <Button variant="secondary" size="sm" disabled={retryDisabled} onClick={onRetry}>
-            重试
+            {t("Retry")}
           </Button>
         </div>
       )}

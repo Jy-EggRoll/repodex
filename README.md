@@ -17,155 +17,165 @@ weight: 1
 
 [![Check](https://github.com/Jy-EggRoll/repodex/actions/workflows/check.yml/badge.svg)](https://github.com/Jy-EggRoll/repodex/actions/workflows/check.yml)
 
-命名：RepositoryIndex——仓库索引聚合。
+English | [简体中文](./README_zh-cn.md)
 
-- 在线试用（演示数据为虚构样例，搜索逻辑与正式版一致）：[RepoDex Demo](https://jy-eggroll.github.io/repodex/)
+RepoDex (**Repo**sitoryIn**dex**) aggregates repository indexes into a **cross-repository, cross-branch fuzzy file search** system, built on GitHub Actions, Cloudflare Workers, and a React + Vite + Kumo frontend.
 
-- 博客文章链接（和 README 完全相同）：[项目介绍-RepoDex](https://eggroll.pages.dev/p/项目介绍-repodex/)
+- Try it online (demo data is fictional; the search logic is the same as production): [RepoDex Demo](https://jy-eggroll.github.io/repodex/)
+- Blog post: [项目介绍-RepoDex](https://eggroll.pages.dev/p/项目介绍-repodex/)
 
-## 为什么要开发此项目
+The project is designed to be **easy to configure and free to run**: in normal use you will stay **far below** the free tiers of GitHub Actions and Cloudflare, so you can deploy it with confidence and no billing concerns.
 
-在日常开发中，开发者在 GitHub 上建立了大量的仓库，其中有各种代码文件、文档资料、资源文件等。GitHub 本身缺少**跨仓库、跨分支的全局文件搜索能力**，这给开发者带来了诸多不便。
+## Why RepoDex
 
-此外，对于中文用户，这些文件中不乏中文文件名的内容，GitHub 也不支持拼音模糊搜索，进一步限制了用户的检索效率。
+Over time, developers accumulate many repositories on GitHub — code, documents, resources. GitHub itself has no **global file search across repositories and branches**, which makes finding a file painful. For Chinese users it is worse: many filenames are Chinese, and GitHub does not support pinyin fuzzy search.
 
-为此，我开发了本项目，基于 GitHub Actions、Cloudflare Workers 和 React + Vite + Kumo 前端，实现了一套**跨仓库、跨分支的多维度模糊搜索系统**，以提升用户在 GitHub 上的文件检索效率。
+RepoDex fills that gap with a cross-repository, cross-branch fuzzy search system to make file retrieval on GitHub efficient.
 
-本项目以**易配置、零成本**的思想开发，在正常使用情况下，**远不可能**达到 GitHub Actions 和 Cloudflare 的免费额度。您可以放心地按照本文流程部署项目，无须担心产生任何成本。
+## What it looks like
 
-## 项目效果速览
+### Mobile-friendly
 
-### 移动端的优良适配
+![Mobile](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/移动端.png)
 
-![移动端](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/移动端.png)
+The screenshot above uses "Search by name" — note how English, Chinese, full pinyin, and pinyin initials all match.
 
-上图采用“按名称搜索”，您可以从中看出中英文、全拼、简拼的匹配效果。
+![Index selection](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/选择索引.png)
 
-![选择索引](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/选择索引.png)
+Indexes can be selected (all selected by default). The dialog filters index names live and offers select all / invert / clear in one click; changing the selection re-searches immediately when a keyword exists. Search is manually submitted (Enter or the button), at most the first 100 results are shown, and huge matches are scored only up to the first 1000 entries with an approximate total — so requests never time out.
 
-本项目支持选择索引，默认全选。弹框内可即时筛选索引名，一键全选 / 反选 / 清除；切换选项后如有关键词会立即重搜。搜索为手动提交（回车或按钮），结果最多展示前 100 条；超大匹配集只取前 1000 计分，总数标约数，保证永不超时。
+### Clean wide-screen layout
 
-### 美观的宽屏布局
+![Wide screen](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/宽屏.png)
 
-![宽屏](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/宽屏.png)
+Repository risk badges: `>900MB` danger, `800–900MB` warning, `<800MB` safe. You should not keep repositories larger than 1GB — there are many reasons, which we won't get into here.
 
-对于仓库显示的标签，`>900MB` 是危险，`800~900MB` 是警告，`<800MB` 是安全。用户不应该存储大于 1GB 的仓库，这其中有很多原因，此处不再赘述。
+### Other highlights
 
-### 其他特点
+- Repositories and files link straight to GitHub.
+- Files from all branches are searched by default (determined by the index).
+- Three theme modes (follow system / light / dark; defaults to follow system, and a manual choice is remembered).
+- Bilingual UI — English / 简体中文 — auto-detected from the browser, switchable manually, and the choice is remembered. All UI strings are wrapped through the l10n layer (VS Code l10n style: English source strings as keys, bundles in `/l10n`).
 
-- 不论是仓库还是文件，都支持点击直达 GitHub。
-- 文件默认检测所有分支（事实上，这是由索引决定的）
-- 主题三档可切（跟随系统 / 浅色 / 深色，默认跟随系统，手动选择会被记住）
+## Deployment
 
-## 部署指南
+All you need is one Cloudflare account (no credit card required). Five steps, six secrets total — overview first (details in each step):
 
-只需一个 Cloudflare 账号（无需绑卡），按下面 5 步走完即上线。全部密钥共 6 个，先总览（细则见各步）：
+| Secret            | Where to set                     | Purpose                                                              |
+| ----------------- | -------------------------------- | -------------------------------------------------------------------- |
+| `CF_ACCOUNT_ID`   | This repo, Actions secrets       | KV endpoint                                                          |
+| `CF_NAMESPACE_ID` | This repo, Actions secrets       | KV endpoint                                                          |
+| `CF_API_TOKEN`    | This repo, Actions secrets       | Writes to KV (needs Workers KV Storage write permission)             |
+| `REPOS_PAT`       | This repo, Actions secrets       | Reads repo file trees for central indexing (fine-grained, read-only) |
+| `USER` / `PSWD`   | Worker variables ("secret" type) | Site login                                                           |
 
-| Secret            | 配在哪里                 | 用途                                   |
-| ----------------- | ------------------------ | -------------------------------------- |
-| `CF_ACCOUNT_ID`   | 本仓库 Actions Secrets   | KV 地址                                |
-| `CF_NAMESPACE_ID` | 本仓库 Actions Secrets   | KV 地址                                |
-| `CF_API_TOKEN`    | 本仓库 Actions Secrets   | 写 KV（需 Workers KV Storage 写权限）  |
-| `REPOS_PAT`       | 本仓库 Actions Secrets   | 中央索引读取仓库文件树（细粒度，只读） |
-| `USER` / `PSWD`   | Workers 变量（选“密钥”） | 站点登录                               |
-
-### 1. Fork 与绑定
+### 1. Fork and connect
 
 ![Fork](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image.png)
 
-如果您愿意为本项目点一个 star，我将非常感激。
+If you find this project helpful, a star would be very much appreciated.
 
-![创建流程](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-1.png)
+![Setup flow](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-1.png)
 
-复制 Account ID（= `CF_ACCOUNT_ID`）。
+Copy the Account ID (= `CF_ACCOUNT_ID`).
 
-![连接-GitHub](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-2.png)
+![Connect GitHub](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-2.png)
 
-连接到 GitHub，如需授权请放心授权，选择自己 Fork 的项目。
+Connect to GitHub (grant authorization if asked) and pick your fork.
 
 > [!IMPORTANT]
 >
-> 构建设置：构建命令填 `pnpm build`，部署命令填 `npx wrangler deploy`。漏掉构建命令会部署失败（产物目录 `dist/` 已在 `wrangler.jsonc` 配好，无需指定输出目录）。
+> Build settings: build command `pnpm build`, deploy command `npx wrangler deploy`. Deployment fails without the build command (the output directory `dist/` is already configured in `wrangler.jsonc`, no need to specify it).
 
-### 2. Cloudflare 侧三项
+### 2. Three things on the Cloudflare side
 
-![创建-KV](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-3.png)
+![Create KV](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-3.png)
 
-按图创建 KV，名称随意，刷新后复制 ID（= `CF_NAMESPACE_ID`）。
+Create a KV namespace (any name), refresh the page, and copy its ID (= `CF_NAMESPACE_ID`).
 
-![创建令牌](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-4.png)
+![Create token](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-4.png)
 
-按图创建拥有 Workers KV Storage 权限的令牌，只展示一次（= `CF_API_TOKEN`），妥善保存。
-
-> [!CAUTION]
->
-> 令牌泄露风险极大，务必妥善保护！
-
-### 3. GitHub 侧一个 Token
-
-- **`REPOS_PAT`**（细粒度 token，只开 Contents 只读 + Metadata 只读，Repository access 选 All repositories，覆盖未来新仓库）：给中央索引读取各仓库文件树，并顺手生成仓库列表快照（含私有）。地址：<https://github.com/settings/personal-access-tokens/new>。注意：Actions 默认 `GITHUB_TOKEN` 只能读本仓库，跨仓读取必须配此项。
+Create a token with the Workers KV Storage permission. It is shown only once (= `CF_API_TOKEN`) — store it safely.
 
 > [!CAUTION]
 >
-> 令牌泄露风险极大，务必妥善保护！
+> A leaked token is a serious risk. Protect it carefully.
 
-### 4. 索引接入（零配置）
+### 3. One token on the GitHub side
 
-中央工作流（`.github/workflows/central-index.yml`）统一生成索引，**各仓库无需任何配置**：
+- **`REPOS_PAT`** (fine-grained token: Contents read-only + Metadata read-only; Repository access: All repositories so future repos are covered): used by central indexing to read file trees and snapshot the repository list (private repos included). Create it at <https://github.com/settings/personal-access-tokens/new>. Note: the default Actions `GITHUB_TOKEN` can only read this repository, so cross-repo reads require this secret.
 
-- 自动发现：每小时整点扫描名下所有仓库（归档/禁用跳过），对比分支 SHA，只处理有变化的仓库，无变化直接跳过。
-- 黑名单：`repos-blocklist.txt` 加一行 `owner/repo` 即可排除。
-- 手动补跑：Actions → Central Repository Index → Run workflow（可指定单个仓库、可 dry-run 预览）。
-- 删库清理：仓库删除后索引 key 自动清理。首次运行全量 backfill，之后增量。
+> [!CAUTION]
+>
+> A leaked token is a serious risk. Protect it carefully.
 
-### 5. Worker 密钥与上线验证
+### 4. Indexing (zero config)
 
-![Cloudflare-机密位置](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-8.png)
+The central workflow (`.github/workflows/central-index.yml`) generates every index — **no per-repo configuration**:
 
-在 Workers → Settings → Variables 添加（类型选“密钥”）：`USER`（登录用户名）、`PSWD`（登录密码）。保存后点部署。
+- Auto-discovery: scans all repositories at the top of every hour (archived/disabled skipped), compares branch SHAs, and processes only changed repositories; the rest are skipped without any per-repo output.
+- Blocklist: add one `owner/repo` line to `repos-blocklist.txt` to exclude a repository.
+- Manual runs: Actions → Central Repository Index → Run workflow (optionally a single repo, or a dry-run preview that only reports counts).
+- Cleanup: indexes of deleted repositories are pruned automatically. The first run backfills everything; later runs are incremental.
 
-上线验证清单：① 首页能打开并登录 ② 搜关键词出结果 ③ 索引数与仓库数对得上。新仓库会被自动发现，无需重新部署。注意仓库列表为每小时快照（非实时），改名/新增后需等下一次同步。
+### 5. Worker secrets and a smoke test
 
-## 项目优点速览
+![Cloudflare secrets location](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-8.png)
 
-- **拼音搜索与模糊搜索**：用户只需要记得文件名中的一些关键词，就可以模糊查找到任何文件。默认启用“以路径搜索”，即使用户的关键词没有体现在文件名本身中，只要用户的分类是合理的，即关键词体现在路径中，也可以搜索到文件。
-- **高性能**：Cloudflare Workers 配合 Cloudflare KV，搜索速度很快。此外，受益于 Cloudflare 自身在全球的强大 CDN，网页本身的访问速度也并不慢。从 Cloudflare 向 GitHub 发起请求的速度也比较理想。
-- **私密性极强**：采用 HTTPS 加密鉴权（Hono 框架），只有同时获得 Cloudflare 机密中用户名与密码的用户，才可以访问（通常也就是用户自己）。若用户担心用户名与密码同时泄露，可以随意在 Cloudflare 后台更改。本项目直接保护网站的根路径，在未授权情况下无法访问任何 api 与页面资源，这甚至杜绝了被攻击的风险。
+In Workers → Settings → Variables, add `USER` (username) and `PSWD` (password), both as "secret" type. Save, then deploy.
 
-## 核心组件
+Smoke test: ① the home page loads and login works ② a keyword returns results ③ the index count matches the repository count. New repositories are discovered automatically — no redeploy needed. Note the repo list is an hourly snapshot (not real-time): renames and additions appear after the next sync.
 
-### 中央索引工作流
+## Features
 
-一套运行在本仓库的自动化工作流（`.github/workflows/central-index.yml` + `scripts/generate_index.mjs`，零依赖，Node 24 内置 fetch）。
+- **Pinyin and fuzzy search**: remember just a keyword from a filename and fuzzy-find any file. "Search by path" is on by default, so even when the keyword is not in the filename itself, a well-organized path still matches.
+- **Fast**: Cloudflare Workers with Cloudflare KV make search quick. Cloudflare's global CDN keeps the page itself fast, and Cloudflare-to-GitHub request latency is ideal.
+- **Strictly private**: HTTPS-authenticated (Hono Basic Auth). Only someone who has both the username and password from the Cloudflare secrets can access it (usually just you). Rotate them in the Cloudflare dashboard whenever you like. Authentication guards the entire root path — without it, neither pages nor API assets are reachable, which eliminates the attack surface entirely.
 
-工作流的任务：
+## Architecture
 
-每小时整点（或手动触发）扫描名下所有仓库，对比 KV 中记录的分支 SHA，只对有变化的仓库拉取文件树、生成统一的全局索引并推送至 Cloudflare KV 存储，同时清理已删除仓库的僵尸索引。
+### Central Index Workflow
 
-KV 中的 key 布局：`{仓库短名}-index`（仓库索引）、`repo-info-cache`（仓库列表快照，每小时由中央索引覆盖，Worker 只读）、`__meta-sha-table`（分支 SHA 记录表，变化检测用，均非 bug）。
+An automation workflow in this repository (`.github/workflows/central-index.yml` + `scripts/generate_index.mjs`, zero dependencies, using the fetch built into Node 24).
 
-## 本地开发与工程化
+Every hour (or on manual dispatch) it scans all repositories, compares branch SHAs against the KV record, pulls file trees and merges the global index only for changed repositories, writes it into Cloudflare KV, and prunes indexes of deleted repositories.
+
+KV key layout (all intentional):
+
+- `{repo-short-name}-index` — per-repository index
+- `repo-info-cache` — repository list snapshot, rewritten hourly by central indexing (the Worker only reads it)
+- `__meta-sha-table` — branch SHA table for change detection
+
+### Internationalization
+
+UI strings follow the VS Code l10n conventions: English source strings are the keys, and translations live in `l10n/bundle.l10n.json` (English identity map) plus `l10n/bundle.l10n.<locale>.json` (e.g. `zh-cn`). Components translate through i18next / react-i18next, configured for flat English keys and `{0}`-style placeholders; the browser language is detected automatically and a manual choice is remembered.
+
+When you add or edit a visible string: wrap it with `t("...")`, add the key to every bundle, then run `pnpm l10n:sort`. The test suite enforces that all locales share the same key set with matching `{n}` placeholders.
+
+## Development
 
 ```bash
-pnpm install        # 安装依赖
-pnpm dev:client     # 前端本地开发（Vite）
-pnpm dev            # Worker 本地开发（需 wrangler 登录）
-pnpm check          # 门禁：格式化检查 + 类型检查 + 测试 + 构建
-pnpm test           # 单元测试（Vitest，纯逻辑种子）
-pnpm format         # Prettier 全仓格式化（含 Tailwind 类序）
-pnpm deploy         # 构建前端并部署 Worker
+pnpm install        # install dependencies
+pnpm dev:client     # frontend dev server (Vite)
+pnpm dev            # Worker dev server (requires wrangler login)
+pnpm check          # gate: format check + typecheck + tests + build
+pnpm test           # unit tests (Vitest, pure-logic seeds)
+pnpm l10n:sort      # sort /l10n bundles by key
+pnpm format         # Prettier across the repo (incl. Tailwind class order)
+pnpm deploy         # build the frontend and deploy the Worker
 ```
 
-提交前跑一遍 `pnpm check`；CI（`.github/workflows/check.yml`）会在 push/PR 时自动跑同一套。
+Run `pnpm check` before committing; CI (`.github/workflows/check.yml`) runs the same gate on push/PR.
 
-## 统计
+## Stats
 
-[![Star History Chart](https://api.star-history.com/chart?repos=jy-eggroll/repodex&type=date&legend=top-left)](https://www.star-history.com/?repos=jy-eggroll%2Fmykeymap-enhance&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/chart?repos=jy-eggroll/repodex&type=date&legend=top-left)](https://www.star-history.com/?repos=jy-eggroll%2Frepodex&type=date&legend=top-left)
 
-## 鸣谢
+## Acknowledgments
 
-- Cloudflare，提供 Workers、Git 集成、KV 等核心功能。
-- <https://github.com/cjinhuo/text-search-engine> 一个相当成熟的搜索器，兼容性好，性能高，支持拼音、模糊搜索。
-- <https://github.com/honojs> Hono 框架，为我的项目提供在 Cloudflare 上最快的速度和严密的安全认证。
-- <https://kumo-ui.com> Kumo，Cloudflare 官方 React 组件库，为前端提供一致的 UI 与无障碍支持。
-- <https://react.dev> React、<https://vite.dev> Vite 与 <https://tailwindcss.com> Tailwind CSS v4，构成前端构建与样式基础。
+- Cloudflare for Workers, Git integration, KV, and the free tier that makes this project possible.
+- [text-search-engine](https://github.com/cjinhuo/text-search-engine) — a mature search engine with great compatibility and performance, supporting pinyin and fuzzy search.
+- [Hono](https://github.com/honojs) — the fastest framework on Cloudflare, providing strict, secure authentication.
+- [Kumo](https://kumo-ui.com) — Cloudflare's official React component library, providing consistent UI and accessibility.
+- [React](https://react.dev), [Vite](https://vite.dev), and [Tailwind CSS v4](https://tailwindcss.com) — the frontend build and styling foundation.
+- [i18next](https://www.i18next.com) / [react-i18next](https://react.i18next.com) — the i18n runtime; the bundle layout follows VS Code's l10n conventions.

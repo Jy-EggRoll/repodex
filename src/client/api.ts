@@ -1,3 +1,5 @@
+import { t } from "./i18n";
+
 export interface RepoInfo {
   name: string;
   size: number;
@@ -25,17 +27,23 @@ export interface SearchResult {
 // Demo 构建开关：VITE_DEMO=1 时走本地合成数据（动态加载，生产包零残留）
 const DEMO = import.meta.env.VITE_DEMO === "1";
 
+/** Read the server error code (if any) and translate it; falls back to a generic message. */
+async function errorMessage(res: Response): Promise<string> {
+  const body = (await res.json().catch(() => null)) as { error?: string } | null;
+  return body?.error ? t(body.error) : t("Request failed ({0})", { 0: res.status });
+}
+
 export async function fetchRepos(): Promise<RepoInfo[]> {
   if (DEMO) return (await import("./demo-search")).listRepos();
   const res = await fetch("/api/get-repo-info");
-  if (!res.ok) throw new Error(res.statusText || `请求失败 ${res.status}`);
+  if (!res.ok) throw new Error(await errorMessage(res));
   return res.json();
 }
 
 export async function fetchIndexList(): Promise<string[]> {
   if (DEMO) return (await import("./demo-search")).listIndexes();
   const res = await fetch("/api/repo-list");
-  if (!res.ok) throw new Error(`请求失败 ${res.status}`);
+  if (!res.ok) throw new Error(await errorMessage(res));
   return res.json();
 }
 
@@ -81,9 +89,6 @@ export async function searchFiles(
   const res = await fetch(
     `/api/search?q=${encodeURIComponent(q)}&file=${encodeURIComponent(fileParam)}&mode=${mode}&limit=${limit}&offset=${offset}`,
   );
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
-    throw new ApiError(res.status, body.error || `请求失败 ${res.status}`);
-  }
+  if (!res.ok) throw new ApiError(res.status, await errorMessage(res));
   return res.json();
 }

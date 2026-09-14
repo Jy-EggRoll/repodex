@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Badge, Empty, Input } from "@cloudflare/kumo";
 import { fetchRepos, type RepoInfo } from "../api";
 import { formatRepoSize } from "../format";
@@ -6,13 +7,8 @@ import ResultCard, { CardSkeleton } from "./ResultCard";
 import ErrorNotice from "./ErrorNotice";
 import { PAGE_TITLE, RESULT_GRID, SKELETON_COUNT, staggerDelayMs } from "../ui";
 
-function riskBadge(risk: RepoInfo["risk"]) {
-  if (risk === "danger") return <Badge variant="error">危险</Badge>;
-  if (risk === "warn") return <Badge variant="warning">警告</Badge>;
-  return <Badge variant="success">安全</Badge>;
-}
-
 export default function RepoList() {
+  const { t } = useTranslation();
   const [repos, setRepos] = useState<RepoInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -46,24 +42,30 @@ export default function RepoList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function riskBadge(risk: RepoInfo["risk"]) {
+    if (risk === "danger") return <Badge variant="error">{t("Danger")}</Badge>;
+    if (risk === "warn") return <Badge variant="warning">{t("Warning")}</Badge>;
+    return <Badge variant="success">{t("Safe")}</Badge>;
+  }
+
   return (
     <section>
-      <h1 className={PAGE_TITLE}>GitHub 仓库列表</h1>
+      <h1 className={PAGE_TITLE}>{t("GitHub repositories")}</h1>
 
       <div className="mb-4">
         <Input
-          aria-label="筛选仓库"
-          placeholder="筛选仓库（名称或描述）…"
+          aria-label={t("Filter repositories")}
+          placeholder={t("Filter repositories (name or description)…")}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="w-full"
         />
       </div>
 
-      {error && <ErrorNotice title="加载失败" message={error} />}
+      {error && <ErrorNotice title={t("Load failed")} message={error} />}
       {!error && !loading && repos.length === 0 && (
         <div className="mt-6">
-          <Empty title="暂无仓库数据" description="数据获取中" />
+          <Empty title={t("No repository data")} description={t("Fetching data")} />
         </div>
       )}
       {loading && repos.length === 0 && (
@@ -75,7 +77,7 @@ export default function RepoList() {
       )}
 
       {!error && !loading && repos.length > 0 && filteredRepos.length === 0 && (
-        <div className="text-kumo-subtle mt-6 text-sm">无匹配仓库</div>
+        <div className="text-kumo-subtle mt-6 text-sm">{t("No matching repositories")}</div>
       )}
 
       <div className={`mt-6 ${RESULT_GRID}`}>
