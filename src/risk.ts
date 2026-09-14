@@ -1,4 +1,4 @@
-/** 仓库体积风险档：后端与 demo 共用，阈值唯一来源。 */
+/** Repository size risk tier: shared by the backend and demo — single source of thresholds. */
 export type RepoRisk = "safe" | "warn" | "danger";
 
 export function riskForSize(sizeMb: number): RepoRisk {

@@ -3,19 +3,19 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* 滚动条出现/消失不改变版心宽度，内容零左右挪动 */
+/* Stable scrollbar gutter: showing/hiding the scrollbar never shifts the content width */
 html {
   scrollbar-gutter: stable;
 }
 
-/* 搜索高亮：纯文字着色（无底色），用 Kumo 文字 token 深浅自适应 */
+/* Search highlight: text color only (no background), auto light/dark via Kumo text tokens */
 mark {
   background-color: transparent;
   color: var(--text-color-kumo-info);
   font-weight: 600;
 }
 
-/* 动画时长与缓动 token */
+/* Animation duration and easing tokens */
 :root {
   --motion-fast: 0.18s;
   --motion-base: 0.25s;
@@ -25,7 +25,7 @@ mark {
   --card-rise: 8px;
 }
 
-/* 主题切换图标过渡：随主题变更重挂载时淡入 + 缩放 + 轻旋转 */
+/* Theme icon transition: fade in + scale + slight rotate when remounted on theme change */
 @keyframes theme-icon-in {
   from {
     opacity: 0;
@@ -41,7 +41,7 @@ mark {
   animation: theme-icon-in var(--motion-base) var(--motion-ease);
 }
 
-/* 主题下拉面板唤出：挂载即播（每次打开重新挂载），淡入 + 缩放 + 下沉浮现 */
+/* Theme dropdown panel: plays on mount (remounted on every open), fade in + scale + rise */
 @keyframes theme-menu-in {
   from {
     opacity: 0;
@@ -58,7 +58,7 @@ mark {
   animation: theme-menu-in var(--motion-fast) var(--motion-ease);
 }
 
-/* 卡片进入：淡入 + 上浮 + 轻缩放；配合行内 animation-delay 做列表错峰 */
+/* Card entry: fade in + rise + slight scale; inline animation-delay staggers the list */
 @keyframes card-in {
   from {
     opacity: 0;
@@ -70,8 +70,8 @@ mark {
   }
 }
 
-/* fill-mode 用 backwards 而非 both：both 会永久保留末帧 transform，
-   使卡片成为常驻层叠上下文，滚动时盖住吸顶顶栏并拦截点击 */
+/* fill-mode is backwards, not both: both would permanently keep the final transform,
+   turning cards into a persistent stacking context that covers the sticky header and swallows clicks */
 .card-enter {
   animation: card-in var(--motion-slow) var(--motion-ease) backwards;
 }

@@ -1,19 +1,19 @@
-// 中央索引生成器：发现仓库 -> SHA 比对 -> 增量生成索引 -> 推送 KV -> 清理僵尸 key。
+// Central index generator: discover repos -> compare SHAs -> build incremental indexes -> push to KV -> prune stale keys.
 //
-// 零依赖（Node 18+ 内置 fetch）。所需环境变量：
-//   REPOS_PAT        GitHub 细粒度 PAT（Contents: 只读 + Metadata: 只读，选 All repositories）
-//   CF_API_TOKEN     Cloudflare API Token（需 Workers KV Storage 写权限）
+// Zero dependencies (Node 18+ built-in fetch). Required environment variables:
+//   REPOS_PAT        GitHub fine-grained PAT (Contents: read-only + Metadata: read-only, all repositories)
+//   CF_API_TOKEN     Cloudflare API Token (needs Workers KV Storage write permission)
 //   CF_ACCOUNT_ID    Cloudflare Account ID
 //   CF_NAMESPACE_ID  Cloudflare KV Namespace ID
-//   REPOS_ONLY       可选，逗号分隔的 owner/repo，仅处理这些仓库（手动补跑用）
-//   DRY_RUN          可选，设为 1 时只统计不写 KV
+//   REPOS_ONLY       Optional, comma-separated owner/repo; process only these repos (manual re-runs)
+//   DRY_RUN          Optional, set to 1 to report only without writing KV
 
 const GH_API = "https://api.github.com";
 const CF_API = "https://api.cloudflare.com/client/v4";
 const SHA_TABLE_KEY = "__meta-sha-table";
 const REPO_INFO_CACHE_KEY = "repo-info-cache";
 
-// 终端颜色：只走 stderr（控制台日志），stdout 专供 Summary 纯净 markdown
+// Terminal colors go to stderr only (console logs); stdout is reserved for clean markdown in the Summary
 const paint = (code) => (s) => (process.env.NO_COLOR === "1" ? s : `\x1b[${code}m${s}\x1b[0m`);
 const green = paint(32);
 const gray = paint(90);
@@ -31,7 +31,7 @@ function required(name) {
 }
 
 async function ghRequest(path, token, what = path) {
-  // 调 GitHub API，自动翻页：列表拼起来，字典直接返回。
+  // GitHub API calls with automatic pagination: concatenate arrays, return objects as-is.
   let result = null;
   let page = 1;
   for (;;) {
@@ -114,7 +114,7 @@ async function cfKvList(account, namespace, token) {
   return (result.result ?? []).map((k) => k.name);
 }
 
-/** repos-blocklist.txt：每行一个 owner/repo，# 开头和空行忽略。 */
+/** repos-blocklist.txt: one owner/repo per line; lines starting with # and blank lines are ignored. */
 export function parseBlocklist(text) {
   return new Set(
     text
@@ -124,7 +124,7 @@ export function parseBlocklist(text) {
   );
 }
 
-/** SHA 表一致则无变化，可跳过。 */
+/** No changes when the SHA tables match, so the repo can be skipped. */
 export function needsUpdate(stored, current) {
   const a = stored ?? {};
   const aKeys = Object.keys(a);
@@ -133,12 +133,12 @@ export function needsUpdate(stored, current) {
   return bKeys.some((k) => a[k] !== current[k]);
 }
 
-/** 只有 SHA 一致且索引 key 真实存在，才算可跳过（防静默漏索引）。 */
+/** Skip only when SHAs match and the index key actually exists (prevents silently missing indexes). */
 export function shouldSkip(stored, current, keyExists) {
   return !needsUpdate(stored, current) && keyExists;
 }
 
-/** 文件树条目转索引分支：与老格式完全一致。 */
+/** Tree entries to an index branch: exactly the legacy format. */
 export function buildBranch(branchName, entries) {
   const files = [];
   const directories = [];
@@ -155,7 +155,7 @@ export function buildBranch(branchName, entries) {
   return { branch_name: branchName, files, directories };
 }
 
-/** 仓库列表转 RepoInfo：与 Worker 旧 getAllRepos 输出形状一致，不过滤（归档也保留）。 */
+/** Repos to RepoInfo: same shape as the Worker's old getAllRepos output; no filtering (archived included). */
 export function buildRepoInfo(repos) {
   const infos = [];
   for (const repo of repos ?? []) {
@@ -196,13 +196,13 @@ async function main() {
   try {
     blocklist = parseBlocklist(await readFile(join(repoRoot, "repos-blocklist.txt"), "utf-8"));
   } catch {
-    // 文件不存在 = 空黑名单
+    // Missing file = empty blocklist
   }
 
   const storedTable = (await cfKvGet(cfAccount, cfNamespace, cfToken, SHA_TABLE_KEY)) ?? {};
   const shaTable = typeof storedTable === "object" && storedTable !== null ? storedTable : {};
 
-  // 日志分流：汇总走 stderr（控制台彩色），报表走 stdout（Summary 纯净 markdown）；输出不含仓库名
+  // Log split: the tally goes to stderr (colored console), the report to stdout (clean markdown for the Summary); output never contains repo names
   const say = (s) => console.error(s);
   const startedAt = Date.now();
   const counts = { total: 0, updated: 0, skipped: 0, warned: 0, pruned: 0 };
@@ -259,7 +259,7 @@ async function main() {
     counts.updated += 1;
   }
 
-  // 清理僵尸 key：-index 后缀但已不在本次发现集合里（repo-info-cache 等不动）
+  // Prune stale keys: -index suffixed but no longer discovered (repo-info-cache and friends stay untouched)
   for (const key of existingKeys) {
     if (key.endsWith("-index") && !discoveredKeys.has(key)) {
       await cfKvDelete(cfAccount, cfNamespace, cfToken, key, dryRun);
@@ -269,7 +269,7 @@ async function main() {
 
   if (!dryRun) await cfKvPut(cfAccount, cfNamespace, cfToken, SHA_TABLE_KEY, shaTable, dryRun);
 
-  // 仓库列表快照：全量同步时覆盖，不过滤（与旧 Worker 直查行为一致）；手动单仓补跑时跳过防误删
+  // Repo list snapshot: overwritten on full sync, unfiltered (matches the old Worker direct-query behavior); skipped on manual single-repo runs to avoid accidental deletion
   if (only.size === 0) {
     const repoInfos = buildRepoInfo(repos);
     await cfKvPut(
@@ -280,22 +280,22 @@ async function main() {
       { data: repoInfos, timestamp: Date.now() },
       dryRun,
     );
-    say(green(`✓ 仓库列表已更新（${repoInfos.length} 个）`));
+    say(green(`✓ Repo list updated (${repoInfos.length} repos)`));
   } else {
-    say(gray("→ 单仓补跑跳过仓库列表更新"));
+    say(gray("-> Single-repo run: skipping repo list update"));
   }
 
   const seconds = Math.round((Date.now() - startedAt) / 1000);
-  const tally = `${counts.updated} 更新 · ${counts.skipped} 跳过 · ${counts.warned} 警告 · ${counts.pruned} 清理 · 用时 ${seconds}s`;
+  const tally = `${counts.updated} updated · ${counts.skipped} skipped · ${counts.warned} warned · ${counts.pruned} pruned · ${seconds}s`;
   say(
-    cyan(`共 ${counts.total} 个仓库：`) +
-      green(`${counts.updated} 更新`) +
-      gray(` · ${counts.skipped} 跳过`) +
-      yellow(` · ${counts.warned} 警告 · ${counts.pruned} 清理`) +
-      cyan(` · 用时 ${seconds}s`),
+    cyan(`${counts.total} repos: `) +
+      green(`${counts.updated} updated`) +
+      gray(` · ${counts.skipped} skipped`) +
+      yellow(` · ${counts.warned} warned · ${counts.pruned} pruned`) +
+      cyan(` · ${seconds}s`),
   );
-  console.log("## 索引同步结果\n");
-  console.log(`共 ${counts.total} 个仓库：${tally}\n`);
+  console.log("## Index Sync Summary\n");
+  console.log(`${counts.total} repos: ${tally}\n`);
 }
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {

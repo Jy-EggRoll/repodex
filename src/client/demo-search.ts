@@ -1,4 +1,4 @@
-/** Demo 数据源：与线上同一匹配库 + 同一排名函数 + 同一高亮构建，仅数据源换成本地合成语料。 */
+/** Demo data source: same matching library, same rank function, and same highlight builder as production — only the data source becomes a locally synthesized corpus. */
 
 import { search as tseSearch } from "text-search-engine";
 import { buildHighlighted } from "../highlight";

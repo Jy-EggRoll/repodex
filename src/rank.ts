@@ -1,4 +1,4 @@
-/** 排名键：全部从匹配库返回的 ranges 直接导出，零新增匹配成本。 */
+/** Rank key: derived directly from the ranges returned by the matching library, at zero extra matching cost. */
 export interface RankKey {
   matched: number;
   targetLen: number;
@@ -18,8 +18,8 @@ export function rankKeyFromRanges(ranges: Array<[number, number]>, targetLen: nu
 }
 
 /**
- * 字典序排名（无权重、无魔法数）：
- * 覆盖率降序 → 首命中位置升序 → 区间数升序 → 目标长度升序。
+ * Lexicographic ranking (no weights, no magic numbers):
+ * coverage desc -> first match position asc -> span count asc -> target length asc.
  */
 export function compareRank(a: RankKey, b: RankKey): number {
   const covA = a.matched / a.targetLen;

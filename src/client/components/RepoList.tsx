@@ -36,7 +36,7 @@ export default function RepoList() {
     }
   }
 
-  // 首屏自动加载（中央索引每小时预写快照）
+  // Load on first mount (the central index pre-writes the snapshot hourly)
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps

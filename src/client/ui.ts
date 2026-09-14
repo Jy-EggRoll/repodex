@@ -1,27 +1,27 @@
-// UI 统一常量：跨组件复用的 Tailwind 片段与动效参数
+// Shared UI constants: Tailwind fragments and motion parameters reused across components
 
-// —— 分页 / 滚动 ——
+// —— Paging / scrolling ——
 export const PAGE_SIZE = 100;
 export const SKELETON_COUNT = 6;
 export const SCROLL_MARGIN = "400px";
 
-// —— 列表错峰入场 ——
+// —— Staggered list entry ——
 const STAGGER_STEP_MS = 40;
 const STAGGER_MAX = 11;
 
-/** 第 index 个列表项的入场延迟（ms）；超过上限后钳制，避免尾部无限叠加。 */
+/** Entry delay (ms) for the list item at `index`; clamped past the cap so the tail never accumulates unbounded delay. */
 export function staggerDelayMs(index: number): number {
   return Math.min(index, STAGGER_MAX) * STAGGER_STEP_MS;
 }
 
-// —— 布局 ——
+// —— Layout ——
 export const CONTENT_MAX_W = "max-w-5xl xl:max-w-7xl";
 export const RESULT_GRID = "grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3";
 export const SHELL_PADDING = "p-4 sm:p-6";
 export const MIN_SEARCH_HEIGHT = "min-h-[56px]";
 export const DIALOG_MAX_H = "max-h-[60vh]";
 
-// —— 面板 / 卡片 / 文字 ——
+// —— Panels / cards / text ——
 export const PANEL = "bg-kumo-base rounded-xl";
 export const HEADER_SHADOW = "shadow-sm";
 export const CONTENT_SHADOW = "shadow-md";

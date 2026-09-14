@@ -1,17 +1,17 @@
 name: Central Repository Index
 
 on:
-  push: # 任意分支推送都跑一次（本流不写回仓库，无自循环风险）
+  push: # runs on any branch push (this workflow never writes back to the repo, so no self-trigger loop)
   schedule:
-    - cron: "42 * * * *" # 每小时的第 42 分钟运行增量同步，避免整点，避免 GitHub 资源不足
-  workflow_dispatch: # 手动触发，可指定单个仓库补跑、可 dry-run
+    - cron: "42 * * * *" # incremental sync at minute 42 of every hour: off the hour mark, when GitHub runners are less contended
+  workflow_dispatch: # manual trigger: re-run a single repo or do a dry run
     inputs:
       repos:
-        description: "仅处理这些仓库（逗号分隔 owner/repo，留空则全部）"
+        description: "Process only these repos (comma-separated owner/repo; empty means all)"
         required: false
         default: ""
       dry_run:
-        description: "只输出统计，不写 KV"
+        description: "Report stats only, do not write KV"
         required: false
         default: "false"
 
@@ -35,5 +35,5 @@ jobs:
           CF_NAMESPACE_ID: ${{ secrets.CF_NAMESPACE_ID }}
           REPOS_ONLY: ${{ inputs.repos }}
           DRY_RUN: ${{ inputs.dry_run == 'true' && '1' || '' }}
-        # stdout（纯净 markdown）进 Summary，stderr（彩色动态）只进控制台日志
+        # stdout (clean markdown) goes to the Summary; stderr (colored progress) stays in the console log
         run: node scripts/generate_index.mjs > "$GITHUB_STEP_SUMMARY"

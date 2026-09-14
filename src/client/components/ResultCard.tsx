@@ -5,14 +5,14 @@ const TITLE_CLASS = "text-kumo-strong text-lg leading-tight font-semibold break-
 
 interface ResultCardProps {
   href: string;
-  /** 纯文本标题（仓库名等），与 titleHtml 二选一 */
+  /** Plain-text title (repo name, etc.); mutually exclusive with titleHtml */
   title?: string;
-  /** 后端返回的高亮 HTML，只在此处做 dangerouslySetInnerHTML */
+  /** Highlight HTML returned by the backend; dangerouslySetInnerHTML is used nowhere else but here */
   titleHtml?: string;
   subtitle: string;
   meta: string;
   badge: ReactNode;
-  /** 进入动画延迟（ms），列表按下标错峰传入；缺省无延迟 */
+  /** Entry animation delay (ms), staggered by list index; omitted means no delay */
   enterDelayMs?: number;
 }
 
@@ -53,7 +53,7 @@ export default function ResultCard({
   );
 }
 
-/** 加载占位：与卡片同尺寸的脉冲块，网格内直接复用。 */
+/** Loading placeholder: a pulse block the same size as a card, reusable directly inside the grid. */
 export function CardSkeleton() {
   return (
     <div aria-hidden className={`${CARD_SHELL} h-[76px]`}>

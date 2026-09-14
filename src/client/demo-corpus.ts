@@ -1,4 +1,4 @@
-/** 演示数据合成器：纯函数，固定种子保证每次输出相同，可单测、无 DOM 依赖。 */
+/** Demo data synthesizer: pure functions, a fixed seed makes every output identical — unit-testable, no DOM dependency. */
 
 export interface DemoFile {
   name: string;
@@ -20,12 +20,12 @@ export interface DemoBranch {
 export interface DemoRepo {
   repository: string;
   repository_short_name: string;
-  /** 仓库体积（KB），与后端 GitHub API 的 size 单位一致 */
+  /** Repository size (KB), same unit as the GitHub API `size` used by the backend */
   sizeKb: number;
   branches: DemoBranch[];
 }
 
-/** 确定性 PRNG（mulberry32），同一种子同输出。 */
+/** Deterministic PRNG (mulberry32): same seed, same output. */
 function rng(seed: number): () => number {
   let a = seed;
   return () => {
@@ -51,6 +51,7 @@ const EN_WORDS = [
   "api",
 ];
 const EN_EXTS = ["ts", "js", "md", "yml", "json"];
+// Chinese demo filenames/directories: exercise pinyin and Chinese filename search (kept in Chinese on purpose)
 const CN_WORDS = ["报告", "方案", "纪要", "合同", "手册", "计划", "总结", "规范", "申请", "通知"];
 const CN_EXTS = ["md", "docx", "txt"];
 const CN_DIRS = ["文档", "资料", "归档"];
@@ -60,9 +61,9 @@ interface RepoProfile {
   short: string;
   branches: string[];
   n: number;
-  /** 仓库体积（KB），驱动大小列与风险徽章 */
+  /** Repository size (KB); drives the size column and the risk badge */
   sizeKb: number;
-  /** 单文件体积上限（bytes） */
+  /** Per-file size ceiling (bytes) */
   fileMax: number;
 }
 

@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { buildDemoCorpus, DEMO_SEED } from "./demo-corpus";
 
 describe("buildDemoCorpus", () => {
-  it("同一种子输出完全一致", () => {
+  it("same seed produces identical output", () => {
     expect(buildDemoCorpus(DEMO_SEED)).toEqual(buildDemoCorpus(DEMO_SEED));
   });
 
-  it("五仓库多分支，有文件有目录", () => {
+  it("five repos with branches, files, and directories", () => {
     const repos = buildDemoCorpus();
     expect(repos).toHaveLength(5);
     expect(repos.map((r) => r.repository_short_name)).toEqual([
@@ -24,7 +24,7 @@ describe("buildDemoCorpus", () => {
     expect(files[0].path.startsWith("./")).toBe(true);
   });
 
-  it("含中文文件名（拼音可搜）", () => {
+  it("includes Chinese filenames (pinyin-searchable)", () => {
     const names = buildDemoCorpus().flatMap((r) => r.branches.flatMap((b) => b.files.map((f) => f.name)));
     expect(names.some((n) => /[\u4e00-\u9fa5]/.test(n))).toBe(true);
   });

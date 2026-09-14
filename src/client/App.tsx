@@ -39,7 +39,7 @@ function ThemeMenuItem({
 }) {
   const { t } = useTranslation();
   const { icon: Icon, labelKey } = THEME_META[value];
-  // 传组件引用（非 <Icon /> 元素），Kumo 才会自动注入 mr-2 h-4 w-4 解决图标文字间距
+  // Pass the component reference (not an <Icon /> element); only then does Kumo inject mr-2 h-4 w-4 to space the icon from the text
   return (
     <DropdownMenu.Item icon={Icon} selected={value === current} onClick={() => onSelect(value)}>
       {t(labelKey)}
@@ -107,7 +107,7 @@ export default function App() {
         </div>
       )}
       <div className={`mx-auto ${CONTENT_MAX_W}`}>
-        {/* 不加 z-index：Kumo 弹框靠 body 末尾 portal 压住页面，有 z-index 反而会盖住弹框 */}
+        {/* No z-index: Kumo dialogs portal to the end of body and cover the page; z-index here would cover the dialogs instead */}
         <div
           className={`${PANEL} sticky top-4 mb-6 flex flex-wrap items-center justify-between gap-2 px-4 py-3 ${HEADER_SHADOW}`}
         >

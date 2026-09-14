@@ -4,7 +4,7 @@ import { Banner, Button } from "@cloudflare/kumo";
 interface ErrorNoticeProps {
   title: string;
   message: string;
-  /** 传入后显示「重试」按钮 */
+  /** When provided, shows the "Retry" button */
   onRetry?: () => void;
   retryDisabled?: boolean;
 }

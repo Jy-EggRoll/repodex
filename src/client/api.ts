@@ -24,7 +24,7 @@ export interface SearchResult {
   highlightedName?: string;
 }
 
-// Demo 构建开关：VITE_DEMO=1 时走本地合成数据（动态加载，生产包零残留）
+// Demo build switch: VITE_DEMO=1 serves locally synthesized data (dynamically imported, zero residue in production bundles)
 const DEMO = import.meta.env.VITE_DEMO === "1";
 
 /** Read the server error code (if any) and translate it; falls back to a generic message. */
@@ -73,7 +73,7 @@ export interface SearchPerf extends SearchResponse {
   roundTripMs: number;
 }
 
-/** 选中索引转 file 查询参数：全选或未选都走 all。 */
+/** Turn the selected indexes into the `file` query param: no selection or full selection both mean "all". */
 export function buildFileParam(checked: string[], total: number): string {
   return checked.length > 0 && checked.length !== total ? checked.join(",") : "all";
 }

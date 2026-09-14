@@ -94,9 +94,9 @@ export default function Search() {
     });
   }
 
-  // 输入框非受控：敲字只走 DOM，不触发 React 渲染；搜索只由回车/按钮/切换手动触发
+  // Uncontrolled input: typing only touches the DOM and never triggers a React render; searches fire only on Enter/button/selection change
   const inputRef = useRef<HTMLInputElement>(null);
-  // 单调请求序号：过期响应直接丢弃，保证结果收敛到最后一次提交
+  // Monotonic request id: stale responses are dropped so results converge on the last submission
   const requestIdRef = useRef(0);
 
   useEffect(() => {
@@ -115,7 +115,7 @@ export default function Search() {
     loadIndexes();
   }, []);
 
-  // "/" 快捷键聚焦搜索框（已在输入框内则不劫持）
+  // "/" shortcut focuses the search box (not hijacked while already inside an input)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement | null)?.tagName;
@@ -172,7 +172,7 @@ export default function Search() {
     void doSearch(inputRef.current?.value ?? "", list, nameMode);
   }
 
-  // 无限滚动：滑到底自动申请下一页并追加
+  // Infinite scroll: reaching the bottom requests and appends the next page
   async function loadMore() {
     if (results === null || loadingMore || searching) return;
     if (results.length >= total) return;

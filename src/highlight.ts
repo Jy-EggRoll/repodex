@@ -10,7 +10,7 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]!);
 }
 
-/** 用匹配区间拼高亮 HTML（后端与 demo 共用，行为唯一来源）。除 <mark> 标签外全部转义，防止仓库/文件名注入脚本。 */
+/** Build highlight HTML from match ranges (shared by the backend and demo — single source of behavior). Everything except the <mark> tags is escaped, so repo/file names cannot inject scripts. */
 export function buildHighlighted(target: string, ranges: Array<[number, number]>): string {
   const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
   const chars = Array.from(target);

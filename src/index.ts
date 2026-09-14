@@ -79,11 +79,11 @@ interface RepoInfoCache {
 const app = new Hono<{ Bindings: Bindings }>();
 
 const ALL_KEY = "__ALL_INDEX__";
-// 单次响应最多返回条数（防传输爆炸）；配合 limit/offset 翻页取全量
+// Max items returned per response (prevents transport blowup); pairs with limit/offset paging to fetch everything
 const MAX_RESULTS = 1000;
-// 匹配收集上限：满即停，total 标约数；给短查询的内存/CPU 上保险丝
+// Match collection cap: stop once full and mark total as approximate; a fuse for short-query memory/CPU
 const SCORE_CAP = 1000;
-// 并行分批大小：I/O 重叠，峰值内存有界；100 为实测值，若 503 回归则降回
+// Parallel batch size: overlaps I/O with bounded peak memory; 100 is a measured value — lower it if 503s return
 const BATCH_SIZE = 100;
 
 function basename(p: string) {
@@ -94,7 +94,7 @@ function basename(p: string) {
 }
 
 app.use(
-  // 不加 force：默认仅 ?pretty 时美化，正常流量保持压缩，省传输与序列化
+  // No force: prettify only when ?pretty is set; normal traffic stays compressed to save transport and serialization
   prettyJSON({
     space: 4,
   }),
@@ -127,14 +127,14 @@ app.use(
 app.get("/api/get-repo-info", async (c) => {
   const CACHE_KEY = "repo-info-cache";
 
-  // 中央索引每小时预写快照，Worker 只读 KV（无 GitHub token）
+  // The central index pre-writes this snapshot hourly; the Worker only reads KV (no GitHub token)
   try {
     const cached = (await c.env.repo_index_kv.get(CACHE_KEY, { type: "json" })) as RepoInfoCache | null;
     if (cached && Array.isArray(cached.data)) {
       return c.json(cached.data);
     }
   } catch (e) {
-    // KV 读取失败，走下方 503
+    // KV read failed; fall through to the 503 below
   }
 
   return c.json({ error: "index not ready, run Central Repository Index workflow first" }, 503);
@@ -144,7 +144,7 @@ app.get("/api/search", async (c) => {
   const q = (c.req.query("q") || "").trim();
   const file = (c.req.query("file") || "all").trim();
   if (!q) return c.json({ error: "empty query" }, 400);
-  // 分页：limit 单页条数（默认 100，上限 MAX_RESULTS），offset 起始下标
+  // Paging: limit = page size (default 100, capped at MAX_RESULTS), offset = start index
   const limit = Math.min(Math.max(Number(c.req.query("limit")) || 100, 1), MAX_RESULTS);
   const offset = Math.max(Number(c.req.query("offset")) || 0, 0);
 
@@ -209,7 +209,7 @@ app.get("/api/search", async (c) => {
     if (isSingle && (cacheKey.includes("..") || cacheKey.includes("/"))) {
       return c.json({ error: "invalid file" }, 400);
     }
-    // 分批并行加载：批内并发、批间串行，峰值内存有界；每次全新加载，无缓存
+    // Batched parallel loading: concurrent within a batch, serial across batches, bounded peak memory; fresh load each time, no caching
     let loadFailCount = 0;
     async function loadOne(fname: string, into: SearchItem[]): Promise<void> {
       try {
@@ -237,7 +237,7 @@ app.get("/api/search", async (c) => {
         filesList = [];
       }
 
-      // 只加载仓库索引，跳过 repo-info-cache 等其它 key
+      // Load repository indexes only; skip other keys such as repo-info-cache
       const names = filesList.filter((fname) => fname && fname.endsWith("-index"));
       await loadBatched(names, merged);
     } else if (cacheKey.includes(",")) {
@@ -266,15 +266,15 @@ app.get("/api/search", async (c) => {
     const indexCount = new Set(items.map((i) => i.repository)).size;
     const itemsTotal = items.length;
     if (isSingle && items.length === 0) {
-      // 区分“索引不存在”与“索引为空”：空结果时复查一次 KV
+      // Distinguish "index missing" from "index empty": re-check KV when the result is empty
       const fj = await loadIndexByName(c, cacheKey);
       if (!fj) return c.json({ error: "not found" }, 404);
     }
 
     const mode = (c.req.query("mode") || "path").trim();
 
-    // 第一阶段：全量只记排名键（下标+4 个数，不存 ranges 坐标），顺手计文件/文件夹数；
-    // 满 SCORE_CAP 即停，total 标约数，给短查询的内存/CPU 上保险丝
+    // Phase 1: record rank keys only (index + 4 numbers, no range coordinates) and tally files/folders along the way;
+    // stop at SCORE_CAP and mark total as approximate — a fuse for short-query memory/CPU
     const scored: Array<{ idx: number; key: RankKey }> = [];
     let fileCount = 0;
     let dirCount = 0;
@@ -302,7 +302,7 @@ app.get("/api/search", async (c) => {
     }
     const tSearch = Date.now();
 
-    // 第二阶段：排序后按 offset/limit 取页，只给本页条目重跑匹配拿 ranges 拼高亮
+    // Phase 2: after sorting, take the offset/limit page and re-run matching only for this page's items to build highlight ranges
     scored.sort((a, b) => compareRank(a.key, b.key));
     const page = scored.slice(offset, offset + limit).slice(0, MAX_RESULTS);
     const results: SearchResult[] = page.map(({ idx, key }) => {
@@ -361,7 +361,7 @@ app.get("/api/repo-list", async (c) => {
   if (!c.env.repo_index_kv) return c.json({ error: "repo_index_kv binding is not available" }, 500);
   try {
     const kvList = await c.env.repo_index_kv.list();
-    // 只返回仓库索引，过滤 repo-info-cache、__meta-sha-table 等内部 key
+    // Return repository indexes only; filter out internal keys such as repo-info-cache and __meta-sha-table
     const names = Array.isArray(kvList.keys)
       ? kvList.keys.map((k: any) => k.name).filter((n: string) => n.endsWith("-index"))
       : [];
@@ -371,7 +371,7 @@ app.get("/api/repo-list", async (c) => {
   }
 });
 
-// 处理静态资源和根路径
+// Serve static assets and the root path
 app.get("*", async (c) => {
   return c.env.public_assets.fetch(c.req.raw);
 });

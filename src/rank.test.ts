@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compareRank, rankKeyFromRanges, type RankKey } from "./rank";
 
-// 实测数据（query=readme）：以前四条打平按入库顺序排，现在必须按此序
+// Measured data (query=readme): the top four used to tie and fall back to insertion order; now this order is required
 const measured: Array<[string, Array<[number, number]>]> = [
   ["README.md", [[0, 5]]],
   ["myreadmebackup", [[2, 7]]],
@@ -10,19 +10,19 @@ const measured: Array<[string, Array<[number, number]>]> = [
 ];
 
 describe("compareRank", () => {
-  it("短而准的排前面", () => {
+  it("sorts short and precise matches first", () => {
     const keys = measured.map(([t, r]) => rankKeyFromRanges(r, t.length) as RankKey);
     const sorted = [...keys].sort(compareRank);
     expect(sorted.map((k) => k.targetLen)).toEqual([9, 14, 20, 32]);
   });
 
-  it("同覆盖率时位置靠前者胜", () => {
+  it("with equal coverage, the earlier position wins", () => {
     const a = rankKeyFromRanges([[2, 5]], 10) as RankKey;
     const b = rankKeyFromRanges([[0, 3]], 10) as RankKey;
     expect(compareRank(b, a)).toBeLessThan(0);
   });
 
-  it("同覆盖同位置时连续者胜", () => {
+  it("with equal coverage and position, the more compact match wins", () => {
     const scattered = rankKeyFromRanges(
       [
         [0, 0],
@@ -35,7 +35,7 @@ describe("compareRank", () => {
     expect(compareRank(solid, scattered)).toBeLessThan(0);
   });
 
-  it("空 ranges 返回 null", () => {
+  it("returns null for empty ranges", () => {
     expect(rankKeyFromRanges([], 10)).toBeNull();
   });
 });

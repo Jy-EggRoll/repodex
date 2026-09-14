@@ -10,7 +10,7 @@ function migrate(old: string | null): ThemeSetting | null {
   return null;
 }
 
-/** 纯函数：记忆值 + 系统偏好 -> 实际生效模式，可单测。 */
+/** Pure function: saved setting + system preference -> effective mode; unit-testable. */
 export function resolveMode(saved: ThemeSetting | null, systemDark: boolean): ThemeMode {
   if (saved === "light" || saved === "dark") return saved;
   return systemDark ? "dark" : "light";
@@ -32,7 +32,7 @@ export function loadSetting(): ThemeSetting {
   }
 }
 
-/** 订阅系统主题变化，返回取消订阅函数。 */
+/** Subscribe to system theme changes; returns an unsubscribe function. */
 export function subscribeSystem(listener: () => void): () => void {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => {};
   const query = window.matchMedia("(prefers-color-scheme: dark)");
@@ -41,7 +41,7 @@ export function subscribeSystem(listener: () => void): () => void {
   return () => query.removeEventListener("change", handler);
 }
 
-// 移动端浏览器顶栏颜色：meta 规范只接受具体色值，此处取 kumo-tint 深浅近似值
+// Mobile browser top-bar color: the meta spec only accepts concrete colors, so use kumo-tint approximations
 const THEME_COLOR: Record<ThemeMode, string> = { light: "#f5f5f5", dark: "#262626" };
 
 export function applyTheme(setting: ThemeSetting): void {
