@@ -11,7 +11,7 @@ on:
         required: false
         default: ""
       dry_run:
-        description: "只打印计划，不写 KV"
+        description: "只输出统计，不写 KV"
         required: false
         default: "false"
 
