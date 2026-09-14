@@ -361,6 +361,7 @@ export default function Search() {
           <div className="min-w-0 flex-1">
             <Input
               ref={inputRef}
+              className="w-full"
               placeholder={t("Type keywords, press Enter or click Search (press / to focus)")}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !searching) searchFromInput();
