@@ -1,8 +1,9 @@
 // Central index generator: discover repos -> compare SHAs -> build incremental indexes -> push to KV -> prune stale keys.
 //
-// Every repository is written in two shapes: chunked v2 keys (`<short>-index@<i>` plus a `__meta-plan`
-// manifest the Worker reads) and the legacy single-key envelope (`<short>-index`), so a Worker rollback
-// needs no data rollback. Chunks are never mixed across repositories, which keeps stale-plan reads safe.
+// The index lives in chunked v2 keys: `<short>-index@<i>` chunks plus a `__meta-plan` manifest the
+// Worker reads. Chunks are never mixed across repositories, which keeps stale-plan reads safe. Any
+// bare `<short>-index` envelope still in KV (the retired legacy format) is deleted by the prune pass
+// of a full run.
 //
 // Zero dependencies (Node 18+ built-in fetch). Required environment variables:
 //   REPOS_PAT        GitHub fine-grained PAT (Contents: read-only + Metadata: read-only, all repositories)
@@ -11,8 +12,6 @@
 //   CF_NAMESPACE_ID  Cloudflare KV Namespace ID
 //   REPOS_ONLY       Optional, comma-separated owner/repo; process only these repos (manual re-runs)
 //   DRY_RUN          Optional, set to 1 to report only without writing KV
-//   SKIP_LEGACY      Optional, set to 1 to stop writing legacy envelopes (frees write quota; designed for
-//                    a future after the rollback window closes, not enabled in v1)
 
 const GH_API = "https://api.github.com";
 const CF_API = "https://api.cloudflare.com/client/v4";
@@ -147,29 +146,25 @@ export function needsUpdate(stored, current) {
   return bKeys.some((k) => a[k] !== current[k]);
 }
 
-/** Skip only when SHAs match, the index key exists, and the stored format is current (a format bump forces one full rebuild). */
+/** Skip only when SHAs match, the repo already has index data, and the stored format is current (a format bump forces one full rebuild). */
 export function shouldSkip(stored, current, keyExists, formatOk) {
   return Boolean(formatOk) && !needsUpdate(stored, current) && keyExists;
 }
 
-/** Tree entries to an index branch: exactly the legacy format. */
-export function buildBranch(branchName, entries) {
-  const files = [];
+/** Tree entries to one branch's index items: files first, then directories, paths without a "./" prefix. */
+export function buildBranchItems(branchName, entries) {
+  const items = [];
   const directories = [];
   for (const entry of entries) {
     const path = entry.path ?? "";
     if (!path) continue;
-    const name = path.split("/").pop();
-    if (entry.type === "blob") {
-      files.push({ name, path: `./${path}`, size: entry.size ?? 0 });
-    } else if (entry.type === "tree") {
-      directories.push({ name, path: `./${path}` });
-    }
+    if (entry.type === "blob") items.push({ type: "file", path, size: entry.size ?? 0 });
+    else if (entry.type === "tree") directories.push({ type: "directory", path });
   }
-  return { branch_name: branchName, files, directories };
+  return { branch: branchName, items: [...items, ...directories] };
 }
 
-/** Strip the legacy "./" prefix so chunk paths match the compact format (readers re-derive names). */
+/** Paths are stored without a leading "./" or "/" (readers re-derive names from the path). */
 function stripDotSlash(p) {
   return String(p ?? "")
     .replace(/^\.\//, "")
@@ -183,23 +178,18 @@ export function encodeChunk(items) {
   );
 }
 
-/**
- * Split one repository's branches into chunks: a branch never spans chunks and the item order matches
- * the legacy envelope exactly (per branch: files then directories), so both formats read back identically.
- */
-export function buildChunkWrites(repo, branchesData) {
+/** Split one repository's branches into chunks; a branch never spans chunks. */
+export function buildChunkWrites(repo, branches) {
   const chunks = [];
   let index = 0;
   let total = 0;
-  for (const branch of branchesData ?? []) {
-    const items = [];
-    for (const f of branch.files ?? []) items.push({ type: "file", path: f.path, size: f.size });
-    for (const d of branch.directories ?? []) items.push({ type: "directory", path: d.path });
+  for (const branch of branches ?? []) {
+    const items = branch.items ?? [];
     for (let i = 0; i < items.length; i += CHUNK_ITEMS) {
       const slice = items.slice(i, i + CHUNK_ITEMS);
       chunks.push({
         key: `${repo.shortName}-index@${index}`,
-        branch: branch.branch_name,
+        branch: branch.branch,
         n: slice.length,
         value: encodeChunk(slice),
       });
@@ -211,19 +201,19 @@ export function buildChunkWrites(repo, branchesData) {
 }
 
 /**
- * Stale keys to delete after a full run: chunks and envelopes not referenced by the new plan.
- * __meta-* keys are never touched. Single-repo runs must not use this (it would prune every other repo).
+ * Keys to delete after a full run: chunks the new plan does not reference, plus every bare `-index`
+ * envelope (the retired legacy format; nothing reads or writes it anymore). __meta-* is never touched.
+ * Single-repo runs must not use this (it would prune every other repo).
  */
-export function computePruneList(existingKeys, planChunks, planIndexNames) {
+export function computePruneList(existingKeys, planChunks) {
   const keepChunks = new Set((planChunks ?? []).map((c) => c.k));
-  const keepIndexes = new Set(planIndexNames ?? []);
   const out = [];
   for (const key of existingKeys ?? []) {
     if (key.startsWith("__meta-")) continue;
     if (CHUNK_KEY_RE.test(key)) {
       if (!keepChunks.has(key)) out.push(key);
     } else if (key.endsWith("-index")) {
-      if (!keepIndexes.has(key)) out.push(key);
+      out.push(key);
     }
   }
   return out;
@@ -265,7 +255,6 @@ async function main() {
       .filter(Boolean),
   );
   const dryRun = process.env.DRY_RUN === "1";
-  const skipLegacy = process.env.SKIP_LEGACY === "1";
 
   let blocklist = new Set();
   try {
@@ -286,6 +275,10 @@ async function main() {
     Array.isArray(rawPlan.repos)
       ? rawPlan
       : null;
+  // Repos the plan records as empty (n=0): they have no chunk to key off, so the plan itself marks them indexed
+  const plannedEmpty = new Set(
+    (prevPlan?.repos ?? []).filter((rp) => rp && rp.n === 0 && rp.rs).map((rp) => rp.rs),
+  );
 
   // Log split: the tally goes to stderr (colored console), the report to stdout (clean markdown for the Summary); output never contains repo names
   const say = (s) => console.error(s);
@@ -318,12 +311,14 @@ async function main() {
       counts.skipped += 1;
       continue;
     }
-    if (shouldSkip(shaTable[fullName], current, existingKeys.has(`${shortName}-index`), formatOk)) {
+    // A repo counts as indexed when its first chunk exists, or the plan records it as empty (n=0)
+    const keyExists = existingKeys.has(`${shortName}-index@0`) || plannedEmpty.has(shortName);
+    if (shouldSkip(shaTable[fullName], current, keyExists, formatOk)) {
       counts.skipped += 1;
       continue;
     }
 
-    const branchesData = [];
+    const branches = [];
     let treeFailed = false;
     for (const [branchName, headSha] of Object.entries(current).sort()) {
       const tree = await ghRequest(
@@ -335,21 +330,17 @@ async function main() {
         treeFailed = true;
         break;
       }
-      branchesData.push(buildBranch(branchName, tree.tree ?? []));
+      branches.push(buildBranchItems(branchName, tree.tree ?? []));
     }
     if (treeFailed) {
       counts.warned += 1;
       continue;
     }
-    const index = { repository: fullName, repository_short_name: shortName, branches: branchesData };
-    // Chunks first, legacy envelope second: a reader must never follow a plan that points at a chunk
-    // that has not landed yet, and the envelope keeps old workers (and rollbacks) functional
-    const writes = buildChunkWrites({ fullName, shortName }, branchesData);
+    // Chunks land before the plan is rewritten: a reader must never follow a plan that points at a
+    // chunk that has not landed yet
+    const writes = buildChunkWrites({ fullName, shortName }, branches);
     for (const c of writes.chunks) {
       await cfKvPut(cfAccount, cfNamespace, cfToken, c.key, c.value, dryRun);
-    }
-    if (!skipLegacy) {
-      await cfKvPut(cfAccount, cfNamespace, cfToken, `${shortName}-index`, index, dryRun);
     }
     for (const c of writes.chunks) {
       newChunks.push({ k: c.key, r: fullName, rs: shortName, b: c.branch, n: c.n });
@@ -388,22 +379,23 @@ async function main() {
   // Prune runs only on full syncs (single-repo runs must never touch other repos' keys): the plan is
   // written first, so a plan never references a chunk that this same run is about to delete
   if (only.size === 0) {
-    const pruneList = computePruneList(
-      existingKeys,
-      plan.chunks,
-      plan.repos.map((rp) => `${rp.rs}-index`),
-    );
+    const pruneList = computePruneList(existingKeys, plan.chunks);
     for (const key of pruneList) {
       await cfKvDelete(cfAccount, cfNamespace, cfToken, key, dryRun);
       counts.pruned += 1;
     }
   } else {
-    // Single-repo runs may still drop this repo's own orphaned chunks from an earlier, longer run
+    // Single-repo runs only drop this repo's own superseded keys: orphaned chunks from an earlier,
+    // longer run plus the retired envelope
     const freshKeys = new Set(newChunks.map((c) => c.k));
-    for (const c of prevPlan?.chunks ?? []) {
-      if (rebuilt.has(c.r) && !freshKeys.has(c.k)) {
-        await cfKvDelete(cfAccount, cfNamespace, cfToken, c.k, dryRun);
-        counts.pruned += 1;
+    const rebuiltShorts = [...new Set(newRepos.map((rp) => rp.rs))];
+    for (const key of existingKeys) {
+      for (const rs of rebuiltShorts) {
+        if ((key === `${rs}-index` || key.startsWith(`${rs}-index@`)) && !freshKeys.has(key)) {
+          await cfKvDelete(cfAccount, cfNamespace, cfToken, key, dryRun);
+          counts.pruned += 1;
+          break;
+        }
       }
     }
   }

@@ -138,11 +138,14 @@ Smoke test: ① the home page loads and login works ② a keyword returns result
 
 An automation workflow in this repository (`.github/workflows/central-index.yml` + `scripts/generate_index.mjs`, zero dependencies, using the fetch built into Node 24).
 
-Every hour (or on manual dispatch) it scans all repositories, compares branch SHAs against the KV record, pulls file trees and merges the global index only for changed repositories, writes it into Cloudflare KV, and prunes indexes of deleted repositories.
+Every hour (or on manual dispatch) it scans all repositories, compares branch SHAs against the KV record, pulls file trees and merges the global index only for changed repositories, writes it into Cloudflare KV, and prunes indexes of deleted repositories (leftover keys from the retired single-file format are cleaned up too).
+
+Search is served by a Durable Object (its 30s CPU budget replaces the 10ms Worker limit on the free plan), which loads index chunks in batches — corpus size no longer causes 503s.
 
 KV key layout (all intentional):
 
-- `{repo-short-name}-index` — per-repository index
+- `__meta-plan` — chunk manifest + repository list; the single source of truth the Worker reads for search and the index list
+- `{repo-short-name}-index@{i}` — per-repository index chunk (≤ 20,000 entries each; repositories are never mixed in a chunk)
 - `repo-info-cache` — repository list snapshot, rewritten hourly by central indexing (the Worker only reads it)
 - `__meta-sha-table` — branch SHA table for change detection
 

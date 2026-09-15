@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildBranch, buildChunkWrites } from "./generate_index.mjs";
-import { decodeChunk, parseLegacyIndex } from "../src/search-core.ts";
+import { buildBranchItems, buildChunkWrites } from "./generate_index.mjs";
+import { decodeChunk } from "../src/search-core.ts";
 
-// Producer/consumer contract: whatever the generator writes as chunks must read back exactly like the
-// legacy envelope the Worker has always parsed (same order, same derived names, same sizes).
+// Producer/consumer contract: generator chunk payloads must decode to exactly the entry stream the
+// Worker scans — same order, names derived from paths, directory sizes undefined.
 
 const TREE = [
   { path: "src", type: "tree" },
@@ -14,31 +14,55 @@ const TREE = [
 ];
 
 describe("generate_index -> search-core contract", () => {
-  it("chunks decode to exactly what the legacy envelope parses to", () => {
-    const branchesData = [
-      buildBranch("dev", [{ path: "说明.md", type: "blob", size: 0 }]),
-      buildBranch("main", TREE),
+  it("chunks decode to the exact entries, in order, with derived names", () => {
+    const branches = [
+      buildBranchItems("dev", [{ path: "说明.md", type: "blob", size: 0 }]),
+      buildBranchItems("main", TREE),
     ];
-    const envelope = { repository: "o/r", repository_short_name: "r", branches: branchesData };
-    const legacy = parseLegacyIndex(envelope);
-
-    const { chunks, repo } = buildChunkWrites({ fullName: "o/r", shortName: "r" }, branchesData);
+    const { chunks, repo } = buildChunkWrites({ fullName: "o/r", shortName: "r" }, branches);
     const decoded = chunks.flatMap((c) => decodeChunk(JSON.stringify(c.value), "o/r", c.branch));
 
-    expect(decoded).toEqual(legacy);
-    expect(repo).toEqual({ r: "o/r", rs: "r", n: legacy.length });
-    expect(chunks.reduce((sum, c) => sum + c.n, 0)).toBe(legacy.length);
+    expect(decoded).toEqual([
+      { name: "说明.md", repository: "o/r", branch: "dev", path: "说明.md", size: 0, type: "file" },
+      { name: "a.ts", repository: "o/r", branch: "main", path: "src/a.ts", size: 120, type: "file" },
+      { name: "README.md", repository: "o/r", branch: "main", path: "README.md", size: 40, type: "file" },
+      {
+        name: "logo.png",
+        repository: "o/r",
+        branch: "main",
+        path: "assets/logo.png",
+        size: 9000,
+        type: "file",
+      },
+      { name: "src", repository: "o/r", branch: "main", path: "src", size: undefined, type: "directory" },
+      {
+        name: "assets",
+        repository: "o/r",
+        branch: "main",
+        path: "assets",
+        size: undefined,
+        type: "directory",
+      },
+    ]);
+    expect(repo).toEqual({ r: "o/r", rs: "r", n: decoded.length });
+    expect(chunks.reduce((sum, c) => sum + c.n, 0)).toBe(decoded.length);
   });
 
-  it("directory tuples derive the same name as the envelope and keep size undefined", () => {
-    const branchesData = [buildBranch("main", TREE)];
-    const legacy = parseLegacyIndex({ repository: "o/r", branches: branchesData });
-    const { chunks } = buildChunkWrites({ fullName: "o/r", shortName: "r" }, branchesData);
+  it("directory tuples derive the name and keep size undefined", () => {
+    const branches = [buildBranchItems("main", TREE)];
+    const { chunks } = buildChunkWrites({ fullName: "o/r", shortName: "r" }, branches);
     const decoded = chunks.flatMap((c) => decodeChunk(JSON.stringify(c.value), "o/r", c.branch));
 
-    const legacyDirs = legacy.filter((e) => e.type === "directory");
-    const decodedDirs = decoded.filter((e) => e.type === "directory");
-    expect(decodedDirs).toEqual(legacyDirs);
-    expect(decodedDirs.every((d) => d.size === undefined)).toBe(true);
+    expect(decoded.filter((e) => e.type === "directory")).toEqual([
+      { name: "src", repository: "o/r", branch: "main", path: "src", size: undefined, type: "directory" },
+      {
+        name: "assets",
+        repository: "o/r",
+        branch: "main",
+        path: "assets",
+        size: undefined,
+        type: "directory",
+      },
+    ]);
   });
 });

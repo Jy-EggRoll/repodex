@@ -9,7 +9,7 @@ import {
   resolveSelection,
   runSearch,
   targetLength,
-  type KvReader,
+  type KvGet,
   type SearchPlan,
   type SearchSpec,
 } from "./search-core";
@@ -56,20 +56,6 @@ const CORPUS: RepoSpec[] = [
   },
 ];
 
-function buildEnvelope(spec: RepoSpec) {
-  const branches = Object.keys(spec.branches)
-    .sort()
-    .map((name) => {
-      const b = spec.branches[name]!;
-      return {
-        branch_name: name,
-        files: b.files.map(([p, size]) => ({ name: p.split("/").pop()!, path: `./${p}`, size })),
-        directories: b.dirs.map((p) => ({ name: p.split("/").pop()!, path: `./${p}` })),
-      };
-    });
-  return { repository: spec.full, repository_short_name: spec.short, branches };
-}
-
 function planOf(
   specs: RepoSpec[],
   chunkSize: number,
@@ -100,30 +86,28 @@ function planOf(
   return { plan: { v: 2, chunks, repos, ts: 1 }, chunkEntries };
 }
 
-function kvFrom(entries: Record<string, unknown>): KvReader {
+function kvFrom(entries: Record<string, unknown>): KvGet {
   const map = new Map<string, string>(Object.entries(entries).map(([k, v]) => [k, JSON.stringify(v)]));
-  return { get: async (k) => map.get(k) ?? null, list: async () => [...map.keys()] };
+  return async (k) => map.get(k) ?? null;
 }
 
-function legacyWorld(specs: RepoSpec[]): KvReader {
-  const entries: Record<string, unknown> = {};
-  for (const s of specs) entries[`${s.short}-index`] = buildEnvelope(s);
-  return kvFrom(entries);
-}
-
-function v2World(specs: RepoSpec[], chunkSize = 2, opts: { dropChunk?: string } = {}): KvReader {
+function v2World(
+  specs: RepoSpec[],
+  chunkSize = 2,
+  opts: { dropChunk?: string; corruptChunk?: string; extra?: Record<string, unknown> } = {},
+): KvGet {
   const { plan, chunkEntries } = planOf(specs, chunkSize);
   const entries: Record<string, unknown> = { [PLAN_KEY]: plan };
   for (const [k, v] of Object.entries(chunkEntries)) {
-    if (k !== opts.dropChunk) entries[k] = v;
+    if (k === opts.dropChunk) continue;
+    entries[k] = k === opts.corruptChunk ? "not-an-array" : v;
   }
-  // Dual-write realism: envelopes exist in the v2 world too and must be ignored when the plan covers them
-  for (const s of specs) entries[`${s.short}-index`] = buildEnvelope(s);
+  for (const [k, v] of Object.entries(opts.extra ?? {})) entries[k] = v;
   return kvFrom(entries);
 }
 
-async function run(kv: KvReader, params: Partial<SearchSpec>) {
-  const out = await runSearch(kv, { q: "", file: "", mode: "", limit: "", offset: "", ...params });
+async function run(get: KvGet, params: Partial<SearchSpec>) {
+  const out = await runSearch(get, { q: "", file: "", mode: "", limit: "", offset: "", ...params });
   return { status: out.status, body: JSON.parse(out.json) };
 }
 
@@ -271,71 +255,77 @@ describe("runSearch validation and selection", () => {
     expect(res.body).toEqual({ error: "empty query" });
   });
 
+  it("a missing plan reports index-not-ready (503) before any file validation", async () => {
+    for (const file of ["", "all", "a-index", "a-index,b-index", "a/b"]) {
+      const res = await run(kvFrom({}), { q: "x", file });
+      expect(res.status, `file=${file}`).toBe(503);
+      expect(res.body).toEqual({ error: "index not ready, run Central Repository Index workflow first" });
+    }
+  });
+
   it("single names containing .. or / are invalid", async () => {
-    const res = await run(kvFrom({}), { q: "x", file: "a/b" });
+    const res = await run(v2World(CORPUS), { q: "x", file: "a/b" });
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: "invalid file" });
   });
 
-  it("missing single index is 404 while an existing empty one is 200", async () => {
-    expect((await run(legacyWorld(CORPUS), { q: "x", file: "nope-index" })).status).toBe(404);
-    expect((await run(legacyWorld(CORPUS), { q: "x", file: "ALL" })).status).toBe(404);
-    const empty = await run(legacyWorld(CORPUS), { q: "x", file: "empty-index" });
+  it("missing single index is 404 while a plan-known empty repo is 200", async () => {
+    const get = v2World(CORPUS);
+    expect((await run(get, { q: "x", file: "nope-index" })).status).toBe(404);
+    expect((await run(get, { q: "x", file: "ALL" })).status).toBe(404);
+    const empty = await run(get, { q: "x", file: "empty-index" });
     expect(empty.status).toBe(200);
     expect(empty.body.total).toBe(0);
+    expect(empty.body.itemsTotal).toBe(0);
   });
 
-  it("plan-known empty repository is 200, not 404", async () => {
-    const res = await run(v2World(CORPUS), { q: "x", file: "empty-index" });
-    expect(res.status).toBe(200);
-    expect(res.body.itemsTotal).toBe(0);
+  it("stray legacy envelope keys in KV are invisible", async () => {
+    const get = v2World(CORPUS, 2, {
+      extra: {
+        "ghost-index": { repository: "o/ghost", branches: [] },
+        "alpha-index": { repository: "o/alpha", repository_short_name: "alpha", branches: [] },
+      },
+    });
+    expect((await run(get, { q: "x", file: "ghost-index" })).status).toBe(404);
+    const all = await run(get, { q: "ghost" });
+    expect(all.body.total).toBe(0);
+    // the plan wins for real repos even when a same-named envelope exists
+    const alpha = await run(get, { q: "readme", file: "alpha-index" });
+    expect(alpha.body.total).toBeGreaterThan(0);
   });
 
-  it("comma lists silently drop invalid names and never 404", async () => {
-    const res = await run(v2World(CORPUS), { q: "readme", file: "alpha-index,bad/name,..,beta-index" });
+  it("comma lists silently drop invalid and unknown names and never 404", async () => {
+    const get = v2World(CORPUS);
+    const res = await run(get, { q: "readme", file: "alpha-index,bad/name,..,missing-index,beta-index" });
     expect(res.status).toBe(200);
-    const legacy = await run(legacyWorld(CORPUS), { q: "readme", file: "alpha-index,beta-index" });
-    expect(withoutTimings(res.body).total).toBe(withoutTimings(legacy.body).total);
+    const both = await run(get, { q: "readme", file: "alpha-index,beta-index" });
+    expect(withoutTimings(res.body)).toEqual(withoutTimings(both.body));
+
+    const unknownOnly = await run(get, { q: "readme", file: "missing-index,nope-index" });
+    expect(unknownOnly.status).toBe(200);
+    expect(unknownOnly.body.total).toBe(0);
   });
 
   it("limit and offset quirks", async () => {
-    const full = await run(legacyWorld(CORPUS), { q: "e" });
+    const get = v2World(CORPUS);
+    const full = await run(get, { q: "e" });
     expect(full.body.total).toBeGreaterThan(1);
 
-    const one = await run(legacyWorld(CORPUS), { q: "e", limit: "1" });
+    const one = await run(get, { q: "e", limit: "1" });
     expect(one.body.results.length).toBe(1);
     expect(one.body.total).toBe(full.body.total);
 
-    const offset = await run(legacyWorld(CORPUS), { q: "e", offset: "1" });
+    const offset = await run(get, { q: "e", offset: "1" });
     expect(offset.body.results[0]).toEqual(full.body.results[1]);
 
-    const negative = await run(legacyWorld(CORPUS), { q: "e", offset: "-3" });
+    const negative = await run(get, { q: "e", offset: "-3" });
     expect(negative.body.results[0]).toEqual(full.body.results[0]);
   });
 });
 
-describe("runSearch output parity between formats", () => {
-  it("chunked world deep-equals the legacy world across parameter variants", async () => {
-    const variants: Array<Partial<SearchSpec>> = [
-      { q: "md" },
-      { q: "e", mode: "name" },
-      { q: "readme", file: "alpha-index" },
-      { q: "说明", file: "alpha-index" },
-      { q: "readme", file: "alpha-index,beta-index" },
-      { q: "readme", file: "alpha-index,alpha-index" },
-      { q: "e", offset: "1", limit: "1" },
-      { q: "x", file: "empty-index" },
-    ];
-    for (const params of variants) {
-      const legacy = await run(legacyWorld(CORPUS), params);
-      const v2 = await run(v2World(CORPUS), params);
-      expect(v2.status, JSON.stringify(params)).toBe(legacy.status);
-      expect(withoutTimings(v2.body), JSON.stringify(params)).toEqual(withoutTimings(legacy.body));
-    }
-  });
-
+describe("runSearch result shape", () => {
   it("the page keeps the historical field order and directory shape", async () => {
-    const res = await run(legacyWorld(CORPUS), { q: "deep", file: "alpha-index" });
+    const res = await run(v2World(CORPUS), { q: "deep", file: "alpha-index" });
     const file = res.body.results.find((r: any) => r.type === "file");
     const dir = res.body.results.find((r: any) => r.type === "directory");
 
@@ -361,12 +351,12 @@ describe("runSearch output parity between formats", () => {
   });
 
   it("mode=name highlights names only and vice versa", async () => {
-    const byName = await run(legacyWorld(CORPUS), { q: "readme", mode: "name" });
+    const byName = await run(v2World(CORPUS), { q: "readme", mode: "name" });
     const named = byName.body.results[0];
     expect(named.highlightedName).toContain("<mark>");
     expect("highlightedPath" in named).toBe(false);
 
-    const byPath = await run(legacyWorld(CORPUS), { q: "readme" });
+    const byPath = await run(v2World(CORPUS), { q: "readme" });
     const pathed = byPath.body.results[0];
     expect(pathed.highlightedPath).toContain("<mark>");
     expect("highlightedName" in pathed).toBe(false);
@@ -425,14 +415,26 @@ describe("runSearch telemetry and failures", () => {
     expect(res.body.total).toBe(2);
   });
 
-  it("a broken legacy envelope is skipped silently in whole-corpus mode but 500s in single mode", async () => {
-    const kv = kvFrom({ "a-index": { repository: "o/a", branches: [null] } });
-    const all = await run(kv, { q: "x" });
-    expect(all.status).toBe(200);
-    expect(all.body.loadFailCount).toBe(1);
-
-    const single = await run(kv, { q: "x", file: "a-index" });
-    expect(single.status).toBe(500);
+  it("a chunk that fails to decode counts as a load failure and keeps partial results", async () => {
+    const spec: RepoSpec = {
+      full: "o/x",
+      short: "x",
+      branches: {
+        main: {
+          files: [
+            ["a.txt", 1],
+            ["b.txt", 1],
+            ["c.txt", 1],
+          ],
+          dirs: [],
+        },
+      },
+    };
+    const res = await run(v2World([spec], 1, { corruptChunk: "x-index@1" }), { q: "txt" });
+    expect(res.status).toBe(200);
+    expect(res.body.loadFailCount).toBe(1);
+    expect(res.body.itemsTotal).toBe(2);
+    expect(res.body.total).toBe(2);
   });
 });
 
@@ -448,7 +450,7 @@ describe("prefilter never hides real matches", () => {
     const queries = ["e", "READ", "zzz", "说明", "sm", "a b", "文档", "全角", "🚀", "t.s"];
     for (const q of queries) {
       const reference = paths.filter((p) => tseSearch(p, q)).sort();
-      const res = await run(legacyWorld(CORPUS), { q, limit: "1000" });
+      const res = await run(v2World(CORPUS), { q, limit: "1000" });
       const got = res.body.results.map((r: any) => r.path).sort();
       expect(got, `q=${q}`).toEqual(reference);
     }

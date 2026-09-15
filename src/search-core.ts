@@ -4,7 +4,7 @@ import { compareRank, rankKeyFromRanges, type RankKey } from "./rank";
 import { search as tseSearch } from "text-search-engine";
 
 // Pure search pipeline, deliberately free of Cloudflare runtime imports (KV access is injected
-// through KvReader) so the whole matching/selection logic can run under vitest unchanged.
+// through a get function) so the whole matching/selection logic can run under vitest unchanged.
 
 /** Raw query-string values as received; parsing quirks are preserved inside runSearch. */
 export interface SearchSpec {
@@ -21,10 +21,8 @@ export interface Outcome {
   json: string;
 }
 
-export interface KvReader {
-  get(key: string): Promise<string | null>;
-  list(): Promise<string[]>;
-}
+/** Minimal KV access: the plan and its chunks are the only keys the engine reads. */
+export type KvGet = (key: string) => Promise<string | null>;
 
 // Max items returned per response (prevents transport blowup); pairs with limit/offset paging to fetch everything
 export const MAX_RESULTS = 1000;
@@ -91,25 +89,6 @@ interface ScoredRef {
   type: "file" | "directory";
 }
 
-/** Legacy index file shape (untrusted input; the old parsing quirks are kept on purpose). */
-interface LegacyIndex {
-  repository?: unknown;
-  branches?: unknown;
-}
-interface LegacyBranch {
-  branch_name?: unknown;
-  files?: unknown;
-  directories?: unknown;
-}
-interface LegacyFile {
-  name?: unknown;
-  path?: unknown;
-  size?: unknown;
-}
-interface LegacyDir {
-  path?: unknown;
-}
-
 export function basename(p: string): string {
   if (!p) return "";
   p = p.replace(/^\.\//, "").replace(/^\//, "");
@@ -117,7 +96,7 @@ export function basename(p: string): string {
   return parts.length ? parts[parts.length - 1] : p;
 }
 
-/** Plan is the single source of truth for chunk layout; anything malformed degrades to the legacy path. */
+/** Plan is the single source of truth for chunk layout; a missing or malformed plan returns null. */
 export function parsePlan(text: string | null): SearchPlan | null {
   if (!text) return null;
   try {
@@ -181,56 +160,6 @@ export function decodeChunk(text: string, repository: string, branch: string): I
   return out;
 }
 
-/**
- * Legacy envelope -> flat entries, in the exact order (and with the exact per-file quirks) of the
- * old in-worker parser; corrupt branch entries throw so callers can decide between fail count and 500.
- */
-export function parseLegacyInto(fj: unknown, out: IndexEntry[]): void {
-  const idx = fj as LegacyIndex | null;
-  if (!idx || !Array.isArray(idx.branches)) return;
-  const repoName = (idx.repository as string) || "";
-  for (const branch of idx.branches as LegacyBranch[]) {
-    const branchName = (branch.branch_name as string) || "";
-    if (Array.isArray(branch.files)) {
-      for (const f of branch.files as LegacyFile[]) {
-        const name = String(f.name || "");
-        const rawPath = String(f.path || "")
-          .replace(/^\.\//, "")
-          .replace(/^\//, "");
-        out.push({
-          name,
-          repository: repoName,
-          branch: branchName,
-          path: rawPath,
-          size: f.size as number | undefined,
-          type: "file",
-        });
-      }
-    }
-    if (Array.isArray(branch.directories)) {
-      for (const d of branch.directories as LegacyDir[]) {
-        const rawPath = String(d.path || "")
-          .replace(/^\.\//, "")
-          .replace(/^\//, "");
-        out.push({
-          name: basename(rawPath),
-          repository: repoName,
-          branch: branchName,
-          path: rawPath,
-          size: undefined,
-          type: "directory",
-        });
-      }
-    }
-  }
-}
-
-export function parseLegacyIndex(fj: unknown): IndexEntry[] {
-  const out: IndexEntry[] = [];
-  parseLegacyInto(fj, out);
-  return out;
-}
-
 /** Printable ASCII without whitespace (0x21-0x7E): the only inputs where the greedy prefilter is provably sound. */
 export function isPlainAscii(s: string): boolean {
   if (!s) return false;
@@ -278,7 +207,7 @@ export type Selection =
   | { kind: "invalid" };
 
 /** Resolve the `file` parameter with the old quirks: "all"/empty means everything, single names may be invalid, lists drop bad entries and duplicate names. */
-export function resolveSelection(fileRaw: string, plan: SearchPlan | null): Selection {
+export function resolveSelection(fileRaw: string, plan: SearchPlan): Selection {
   const file = (fileRaw || "all").trim();
   if (file === "all" || !file) return { kind: "all" };
   if (file.includes(",")) {
@@ -293,12 +222,12 @@ export function resolveSelection(fileRaw: string, plan: SearchPlan | null): Sele
     return { kind: "list", names };
   }
   if (file.includes("..") || file.includes("/")) return { kind: "invalid" };
-  const rp = plan ? findPlanRepo(plan, file) : null;
+  const rp = findPlanRepo(plan, file);
   return {
     kind: "single",
     name: file,
     known: rp !== null,
-    chunks: rp && plan ? plan.chunks.filter((c) => c.rs === rp.rs) : [],
+    chunks: rp ? plan.chunks.filter((c) => c.rs === rp.rs) : [],
   };
 }
 
@@ -306,7 +235,7 @@ export function errorOutcome(status: number, error: string): Outcome {
   return { status, json: JSON.stringify({ error }) };
 }
 
-export async function runSearch(kv: KvReader, spec: SearchSpec): Promise<Outcome> {
+export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> {
   const q = (spec.q || "").trim();
   const file = (spec.file || "all").trim();
   if (!q) return errorOutcome(400, "empty query");
@@ -368,7 +297,7 @@ export async function runSearch(kv: KvReader, spec: SearchSpec): Promise<Outcome
   const loadChunks = async (descs: PlanChunk[]): Promise<boolean> => {
     let done = 0;
     for (const batch of chunk(descs, LOAD_CONCURRENCY)) {
-      const values = await Promise.all(batch.map((d) => kv.get(d.k).catch(() => null)));
+      const values = await Promise.all(batch.map((d) => get(d.k).catch(() => null)));
       for (let j = 0; j < batch.length; j++) {
         const d = batch[j];
         const text = values[j];
@@ -400,91 +329,22 @@ export async function runSearch(kv: KvReader, spec: SearchSpec): Promise<Outcome
     return false;
   };
 
-  // Legacy envelopes: missing or unreadable keys are skipped silently (same as before); parse failures
-  // count against loadFailCount while keeping whatever was parsed before the failure.
-  const loadLegacyNames = async (names: string[], dedupe: Set<string> | null): Promise<boolean> => {
-    for (const batch of chunk(names, LOAD_CONCURRENCY)) {
-      const values = await Promise.all(batch.map((n) => kv.get(n).catch(() => null)));
-      for (const text of values) {
-        if (text == null) continue;
-        let fj: unknown;
-        try {
-          fj = JSON.parse(text);
-        } catch {
-          continue;
-        }
-        let entries: IndexEntry[] = [];
-        try {
-          parseLegacyInto(fj, entries);
-        } catch {
-          loadFailCount += 1;
-        }
-        if (dedupe) {
-          entries = entries.filter((e) => {
-            const key = `${e.repository || ""}|${e.branch || ""}|${e.path || ""}|${e.type || ""}`;
-            if (dedupe.has(key)) return false;
-            dedupe.add(key);
-            return true;
-          });
-        }
-        itemsTotal += entries.length;
-        for (const e of entries) indexSet.add(e.repository);
-        if (scanEntries(entries)) return true;
-      }
-    }
-    return false;
-  };
-
   try {
-    const plan = parsePlan(await kv.get(PLAN_KEY).catch(() => null));
+    const plan = parsePlan(await get(PLAN_KEY).catch(() => null));
+    if (!plan) return errorOutcome(503, "index not ready, run Central Repository Index workflow first");
     const selection = resolveSelection(file, plan);
     if (selection.kind === "invalid") return errorOutcome(400, "invalid file");
 
     if (selection.kind === "all") {
-      const planChunks = plan ? plan.chunks : [];
-      const planKeys = new Set<string>();
-      if (plan) {
-        for (const rp of plan.repos) if (rp.rs) planKeys.add(`${rp.rs}-index`);
-        for (const c of plan.chunks) planKeys.add(`${c.rs}-index`);
-      }
-      let allNames: string[] = [];
-      try {
-        allNames = await kv.list();
-      } catch {
-        allNames = [];
-      }
-      // Repos already covered by the plan are read as chunks; anything else still lives in a legacy envelope
-      const gap = allNames.filter((n) => n && n.endsWith("-index") && !planKeys.has(n));
-      if (!(await loadChunks(planChunks))) await loadLegacyNames(gap, null);
+      await loadChunks(plan.chunks);
     } else if (selection.kind === "single") {
-      if (selection.known) {
-        await loadChunks(selection.chunks);
-      } else {
-        // Distinguish "index missing" from "index empty": a readable envelope that parses to zero
-        // items is a valid, empty result
-        const text = await kv.get(selection.name).catch(() => null);
-        if (text == null) return errorOutcome(404, "not found");
-        let fj: unknown;
-        try {
-          fj = JSON.parse(text);
-        } catch {
-          return errorOutcome(404, "not found");
-        }
-        const entries: IndexEntry[] = [];
-        parseLegacyInto(fj, entries); // corrupt entries throw -> outer catch -> 500
-        itemsTotal += entries.length;
-        for (const e of entries) indexSet.add(e.repository);
-        scanEntries(entries);
-      }
+      if (!selection.known) return errorOutcome(404, "not found");
+      await loadChunks(selection.chunks);
     } else {
-      const dedupe = new Set<string>();
       for (const name of selection.names) {
-        const rp = plan ? findPlanRepo(plan, name) : null;
-        const stopped =
-          plan && rp
-            ? await loadChunks(plan.chunks.filter((c) => c.rs === rp.rs))
-            : await loadLegacyNames([name], dedupe);
-        if (stopped) break;
+        const rp = findPlanRepo(plan, name);
+        if (!rp) continue; // unknown names are dropped silently, same as the old per-name loads
+        if (await loadChunks(plan.chunks.filter((c) => c.rs === rp.rs))) break;
       }
     }
 
@@ -553,4 +413,11 @@ export async function runSearch(kv: KvReader, spec: SearchSpec): Promise<Outcome
   } catch (err) {
     return errorOutcome(500, String(err));
   }
+}
+
+/** Index selector list for /api/repo-list: `${short}-index` tokens derived from the plan (empty before the first sync). */
+export async function runRepoList(get: KvGet): Promise<Outcome> {
+  const plan = parsePlan(await get(PLAN_KEY).catch(() => null));
+  const names = plan ? plan.repos.filter((rp) => rp.rs).map((rp) => `${rp.rs}-index`) : [];
+  return { status: 200, json: JSON.stringify(names) };
 }

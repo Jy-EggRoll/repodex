@@ -89,14 +89,14 @@ app.get("/api/search", async (c) => {
 app.get("/api/repo-list", async (c) => {
   if (!c.env.repo_index_kv) return c.json({ error: "repo_index_kv binding is not available" }, 500);
   try {
-    const kvList = await c.env.repo_index_kv.list();
-    // Return repository indexes only; filter out internal keys such as repo-info-cache and __meta-sha-table
-    const names = Array.isArray(kvList.keys)
-      ? kvList.keys.map((k: any) => k.name).filter((n: string) => n.endsWith("-index"))
-      : [];
-    return c.json(names);
-  } catch (e) {
-    return c.json({ error: String(e) }, 500);
+    const stub = c.env.SEARCH_ENGINE.get(c.env.SEARCH_ENGINE.idFromName("global"));
+    // Same relay as /api/search: the plan grows with the corpus, so parsing it stays off the 10ms root budget
+    const outcome = await stub.listIndexes();
+    return c.body(outcome.json, outcome.status as ContentfulStatusCode, {
+      "Content-Type": "application/json",
+    });
+  } catch (err) {
+    return c.json({ error: String(err) }, 500);
   }
 });
 
