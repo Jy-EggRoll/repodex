@@ -1,6 +1,6 @@
 import { chunk } from "./batch";
 import { buildHighlighted } from "./highlight";
-import { compareRank, rankKeyFromRanges, type RankKey } from "./rank";
+import { compareRank, rankKeyFromRanges, recencyBoost, type RankKey } from "./rank";
 import { search as tseSearch } from "text-search-engine";
 
 // Pure search pipeline, deliberately free of Cloudflare runtime imports (KV access is injected
@@ -41,11 +41,12 @@ export interface PlanChunk {
   n: number;
 }
 
-/** One repository present in the index (n=0 marks "exists but empty" so it is not a 404). */
+/** One repository present in the index (n=0 marks "exists but empty" so it is not a 404; t = last push time, epoch ms). */
 export interface PlanRepo {
   r: string;
   rs: string;
   n: number;
+  t?: number;
 }
 
 export interface SearchPlan {
@@ -253,10 +254,12 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
   let truncated = false;
   const indexSet = new Set<string>();
   const scored: ScoredRef[] = [];
+  // Repo-level recency: every entry of a repository shares its last push time (unknown = neutral)
+  const repoTs = new Map<string, number>();
 
   // Phase 1: record rank keys only (index + numbers, no range coordinates) and tally files/folders;
   // stop at SCORE_CAP and mark total as approximate -- a fuse for short-query memory/CPU
-  const scanEntries = (entries: IndexEntry[]): boolean => {
+  const scanEntries = (entries: IndexEntry[], boost: number): boolean => {
     const s0 = Date.now();
     let stop = false;
     for (const e of entries) {
@@ -267,7 +270,7 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
       try {
         const ranges = tseSearch(target, q);
         if (!ranges) continue;
-        key = rankKeyFromRanges(ranges, targetLength(target));
+        key = rankKeyFromRanges(ranges, targetLength(target), boost);
         if (!key) continue;
       } catch {
         continue; // matching library failures are swallowed, same as before
@@ -314,7 +317,7 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
         }
         itemsTotal += d.n;
         if (entries.length > 0) indexSet.add(d.r);
-        if (scanEntries(entries)) {
+        if (scanEntries(entries, recencyBoost(repoTs.get(d.rs), t0))) {
           // Cap reached: account for the still-selected chunks from the plan so telemetry matches
           // the old "load the whole corpus first" behavior
           for (let k = done + j + 1; k < descs.length; k++) {
@@ -332,6 +335,9 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
   try {
     const plan = parsePlan(await get(PLAN_KEY).catch(() => null));
     if (!plan) return errorOutcome(503, "index not ready, run Central Repository Index workflow first");
+    for (const rp of plan.repos) {
+      if (typeof rp.t === "number" && Number.isFinite(rp.t)) repoTs.set(rp.rs, rp.t);
+    }
     const selection = resolveSelection(file, plan);
     if (selection.kind === "invalid") return errorOutcome(400, "invalid file");
 

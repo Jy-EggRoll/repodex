@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  attachPushedAt,
   buildBranchItems,
   buildChunkWrites,
   computePruneList,
@@ -135,6 +136,23 @@ describe("buildChunkWrites", () => {
     const { chunks, repo: ref } = buildChunkWrites(repo, [{ branch: "main", items: [] }]);
     expect(chunks).toEqual([]);
     expect(ref).toEqual({ r: "o/r", rs: "r", n: 0 });
+  });
+});
+
+describe("attachPushedAt", () => {
+  it("fills t from the map and keeps a previously stored value on a map miss", () => {
+    const map = new Map([["o/a", 111]]);
+    expect(attachPushedAt([{ r: "o/a", rs: "a", n: 3 }], map)).toEqual([{ r: "o/a", rs: "a", n: 3, t: 111 }]);
+    expect(attachPushedAt([{ r: "o/b", rs: "b", n: 3, t: 222 }], map)).toEqual([
+      { r: "o/b", rs: "b", n: 3, t: 222 },
+    ]);
+  });
+
+  it("does not mutate the input and tolerates a missing list", () => {
+    const input = [{ r: "o/a", rs: "a", n: 1 }];
+    attachPushedAt(input, new Map([["o/a", 5]]));
+    expect(input).toEqual([{ r: "o/a", rs: "a", n: 1 }]);
+    expect(attachPushedAt(undefined, new Map())).toEqual([]);
   });
 });
 

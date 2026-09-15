@@ -5,6 +5,10 @@
 // bare `<short>-index` envelope still in KV (the retired legacy format) is deleted by the prune pass
 // of a full run.
 //
+// Plan repo entries also record each repository's last push time (epoch ms), which readers turn into
+// a bounded recency boost when ranking. The data comes from the repo list fetched below, so it costs
+// no extra API calls.
+//
 // Zero dependencies (Node 18+ built-in fetch). Required environment variables:
 //   REPOS_PAT        GitHub fine-grained PAT (Contents: read-only + Metadata: read-only, all repositories)
 //   CF_API_TOKEN     Cloudflare API Token (needs Workers KV Storage write permission)
@@ -219,6 +223,11 @@ export function computePruneList(existingKeys, planChunks) {
   return out;
 }
 
+/** Attach each repo's last push time (epoch ms) to its plan entry; readers rank recently pushed repos higher. */
+export function attachPushedAt(list, pushedAtByFull) {
+  return (list ?? []).map((rp) => ({ ...rp, t: pushedAtByFull.get(rp.r) ?? rp.t }));
+}
+
 /** Repos to RepoInfo: same shape as the Worker's old getAllRepos output; no filtering (archived included). */
 export function buildRepoInfo(repos) {
   const infos = [];
@@ -291,6 +300,12 @@ async function main() {
   const rebuilt = new Set();
 
   const repos = await ghRequest("/user/repos?affiliation=owner&sort=full_name", ghToken);
+  // Last-push table for the plan (free: already in the repo list response); missing repos keep their previous value
+  const pushedAt = new Map();
+  for (const repo of repos) {
+    const t = Date.parse(repo.pushed_at ?? "");
+    if (repo.full_name && Number.isFinite(t)) pushedAt.set(repo.full_name, t);
+  }
   for (const repo of repos) {
     const fullName = repo.full_name ?? "";
     if (!fullName || repo.archived || repo.disabled) continue;
@@ -371,7 +386,7 @@ async function main() {
     chunks: [...newChunks, ...carriedChunks].sort(
       (a, b) => byText(a.rs, b.rs) || byText(a.b, b.b) || chunkNumber(a.k) - chunkNumber(b.k),
     ),
-    repos: [...newRepos, ...carriedRepos].sort((a, b) => byText(a.rs, b.rs)),
+    repos: attachPushedAt([...newRepos, ...carriedRepos], pushedAt).sort((a, b) => byText(a.rs, b.rs)),
     ts: Date.now(),
   };
   await cfKvPut(cfAccount, cfNamespace, cfToken, PLAN_KEY, plan, dryRun);

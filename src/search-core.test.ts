@@ -24,6 +24,7 @@ interface RepoSpec {
   full: string;
   short: string;
   branches: Record<string, BranchSpec>;
+  t?: number;
 }
 
 const CORPUS: RepoSpec[] = [
@@ -81,7 +82,9 @@ function planOf(
         total += slice.length;
       }
     }
-    repos.push({ r: spec.full, rs: spec.short, n: total });
+    const entry: SearchPlan["repos"][number] = { r: spec.full, rs: spec.short, n: total };
+    if (spec.t !== undefined) entry.t = spec.t;
+    repos.push(entry);
   }
   return { plan: { v: 2, chunks, repos, ts: 1 }, chunkEntries };
 }
@@ -188,6 +191,11 @@ describe("parsePlan", () => {
       repos: [{ r: "o/a", rs: "a", n: 3 }],
       ts: 5,
     });
+  });
+
+  it("passes the optional recency timestamp through untouched", () => {
+    const ok = parsePlan(JSON.stringify({ v: 2, chunks: [], repos: [{ r: "o/a", rs: "a", n: 1, t: 42 }] }));
+    expect(ok?.repos).toEqual([{ r: "o/a", rs: "a", n: 1, t: 42 }]);
   });
 });
 
@@ -320,6 +328,36 @@ describe("runSearch validation and selection", () => {
 
     const negative = await run(get, { q: "e", offset: "-3" });
     expect(negative.body.results[0]).toEqual(full.body.results[0]);
+  });
+});
+
+describe("repo-level recency", () => {
+  const day = 86400000;
+  const now = Date.now();
+  const FRESH_STALE: RepoSpec[] = [
+    {
+      full: "owner/old",
+      short: "old",
+      t: now - 400 * day,
+      branches: { main: { files: [["notes.txt", 10]], dirs: [] } },
+    },
+    {
+      full: "owner/new",
+      short: "new",
+      t: now,
+      branches: { main: { files: [["notes.txt", 10]], dirs: [] } },
+    },
+  ];
+
+  it("a freshly pushed repository floats above an otherwise equal stale one", async () => {
+    const res = await run(v2World(FRESH_STALE), { q: "notes.txt" });
+    expect(res.body.results.map((r: any) => r.repository)).toEqual(["owner/new", "owner/old"]);
+  });
+
+  it("plans without timestamps keep the scan order (boost is neutral)", async () => {
+    const stripped = FRESH_STALE.map((s) => ({ full: s.full, short: s.short, branches: s.branches }));
+    const res = await run(v2World(stripped), { q: "notes.txt" });
+    expect(res.body.results.map((r: any) => r.repository)).toEqual(["owner/old", "owner/new"]);
   });
 });
 
