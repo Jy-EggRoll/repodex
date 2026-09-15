@@ -13,4 +13,19 @@
       "binding": "repo_index_kv",
     },
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SEARCH_ENGINE",
+        "class_name": "SearchEngine",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      // Tag must never be renamed; SQLite-backed class keeps Durable Objects on the free plan
+      "tag": "v1",
+      "new_sqlite_classes": ["SearchEngine"],
+    },
+  ],
 }

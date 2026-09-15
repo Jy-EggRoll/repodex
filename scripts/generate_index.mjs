@@ -1,5 +1,9 @@
 // Central index generator: discover repos -> compare SHAs -> build incremental indexes -> push to KV -> prune stale keys.
 //
+// Every repository is written in two shapes: chunked v2 keys (`<short>-index@<i>` plus a `__meta-plan`
+// manifest the Worker reads) and the legacy single-key envelope (`<short>-index`), so a Worker rollback
+// needs no data rollback. Chunks are never mixed across repositories, which keeps stale-plan reads safe.
+//
 // Zero dependencies (Node 18+ built-in fetch). Required environment variables:
 //   REPOS_PAT        GitHub fine-grained PAT (Contents: read-only + Metadata: read-only, all repositories)
 //   CF_API_TOKEN     Cloudflare API Token (needs Workers KV Storage write permission)
@@ -7,11 +11,21 @@
 //   CF_NAMESPACE_ID  Cloudflare KV Namespace ID
 //   REPOS_ONLY       Optional, comma-separated owner/repo; process only these repos (manual re-runs)
 //   DRY_RUN          Optional, set to 1 to report only without writing KV
+//   SKIP_LEGACY      Optional, set to 1 to stop writing legacy envelopes (frees write quota; designed for
+//                    a future after the rollback window closes, not enabled in v1)
 
 const GH_API = "https://api.github.com";
 const CF_API = "https://api.cloudflare.com/client/v4";
 const SHA_TABLE_KEY = "__meta-sha-table";
 const REPO_INFO_CACHE_KEY = "repo-info-cache";
+const PLAN_KEY = "__meta-plan";
+// Sentinel inside the SHA table: a mismatch forces one full rebuild so missing chunks get backfilled,
+// and only a successful full run may write it (single-repo runs must not, or the next full run would
+// happily skip repositories that never got chunked)
+const FORMAT_KEY = "__format";
+const FORMAT_VERSION = 2;
+const CHUNK_ITEMS = 20000;
+const CHUNK_KEY_RE = /-index@\d+$/;
 
 // Terminal colors go to stderr only (console logs); stdout is reserved for clean markdown in the Summary
 const paint = (code) => (s) => (process.env.NO_COLOR === "1" ? s : `\x1b[${code}m${s}\x1b[0m`);
@@ -133,9 +147,9 @@ export function needsUpdate(stored, current) {
   return bKeys.some((k) => a[k] !== current[k]);
 }
 
-/** Skip only when SHAs match and the index key actually exists (prevents silently missing indexes). */
-export function shouldSkip(stored, current, keyExists) {
-  return !needsUpdate(stored, current) && keyExists;
+/** Skip only when SHAs match, the index key exists, and the stored format is current (a format bump forces one full rebuild). */
+export function shouldSkip(stored, current, keyExists, formatOk) {
+  return Boolean(formatOk) && !needsUpdate(stored, current) && keyExists;
 }
 
 /** Tree entries to an index branch: exactly the legacy format. */
@@ -153,6 +167,66 @@ export function buildBranch(branchName, entries) {
     }
   }
   return { branch_name: branchName, files, directories };
+}
+
+/** Strip the legacy "./" prefix so chunk paths match the compact format (readers re-derive names). */
+function stripDotSlash(p) {
+  return String(p ?? "")
+    .replace(/^\.\//, "")
+    .replace(/^\//, "");
+}
+
+/** Compact chunk payload: [[t, path, size], ...] with t=0 file / t=1 directory; directories omit size. */
+export function encodeChunk(items) {
+  return items.map((item) =>
+    item.type === "directory" ? [1, stripDotSlash(item.path)] : [0, stripDotSlash(item.path), item.size ?? 0],
+  );
+}
+
+/**
+ * Split one repository's branches into chunks: a branch never spans chunks and the item order matches
+ * the legacy envelope exactly (per branch: files then directories), so both formats read back identically.
+ */
+export function buildChunkWrites(repo, branchesData) {
+  const chunks = [];
+  let index = 0;
+  let total = 0;
+  for (const branch of branchesData ?? []) {
+    const items = [];
+    for (const f of branch.files ?? []) items.push({ type: "file", path: f.path, size: f.size });
+    for (const d of branch.directories ?? []) items.push({ type: "directory", path: d.path });
+    for (let i = 0; i < items.length; i += CHUNK_ITEMS) {
+      const slice = items.slice(i, i + CHUNK_ITEMS);
+      chunks.push({
+        key: `${repo.shortName}-index@${index}`,
+        branch: branch.branch_name,
+        n: slice.length,
+        value: encodeChunk(slice),
+      });
+      index += 1;
+      total += slice.length;
+    }
+  }
+  return { chunks, repo: { r: repo.fullName, rs: repo.shortName, n: total } };
+}
+
+/**
+ * Stale keys to delete after a full run: chunks and envelopes not referenced by the new plan.
+ * __meta-* keys are never touched. Single-repo runs must not use this (it would prune every other repo).
+ */
+export function computePruneList(existingKeys, planChunks, planIndexNames) {
+  const keepChunks = new Set((planChunks ?? []).map((c) => c.k));
+  const keepIndexes = new Set(planIndexNames ?? []);
+  const out = [];
+  for (const key of existingKeys ?? []) {
+    if (key.startsWith("__meta-")) continue;
+    if (CHUNK_KEY_RE.test(key)) {
+      if (!keepChunks.has(key)) out.push(key);
+    } else if (key.endsWith("-index")) {
+      if (!keepIndexes.has(key)) out.push(key);
+    }
+  }
+  return out;
 }
 
 /** Repos to RepoInfo: same shape as the Worker's old getAllRepos output; no filtering (archived included). */
@@ -191,6 +265,7 @@ async function main() {
       .filter(Boolean),
   );
   const dryRun = process.env.DRY_RUN === "1";
+  const skipLegacy = process.env.SKIP_LEGACY === "1";
 
   let blocklist = new Set();
   try {
@@ -201,13 +276,26 @@ async function main() {
 
   const storedTable = (await cfKvGet(cfAccount, cfNamespace, cfToken, SHA_TABLE_KEY)) ?? {};
   const shaTable = typeof storedTable === "object" && storedTable !== null ? storedTable : {};
+  const formatOk = shaTable[FORMAT_KEY] === FORMAT_VERSION;
+  const rawPlan = await cfKvGet(cfAccount, cfNamespace, cfToken, PLAN_KEY);
+  const prevPlan =
+    rawPlan &&
+    typeof rawPlan === "object" &&
+    rawPlan.v === FORMAT_VERSION &&
+    Array.isArray(rawPlan.chunks) &&
+    Array.isArray(rawPlan.repos)
+      ? rawPlan
+      : null;
 
   // Log split: the tally goes to stderr (colored console), the report to stdout (clean markdown for the Summary); output never contains repo names
   const say = (s) => console.error(s);
   const startedAt = Date.now();
-  const counts = { total: 0, updated: 0, skipped: 0, warned: 0, pruned: 0 };
+  const counts = { total: 0, updated: 0, skipped: 0, warned: 0, pruned: 0, chunks: 0 };
   const discoveredKeys = new Set();
   const existingKeys = new Set(await cfKvList(cfAccount, cfNamespace, cfToken));
+  const newChunks = [];
+  const newRepos = [];
+  const rebuilt = new Set();
 
   const repos = await ghRequest("/user/repos?affiliation=owner&sort=full_name", ghToken);
   for (const repo of repos) {
@@ -230,7 +318,7 @@ async function main() {
       counts.skipped += 1;
       continue;
     }
-    if (shouldSkip(shaTable[fullName], current, existingKeys.has(`${shortName}-index`))) {
+    if (shouldSkip(shaTable[fullName], current, existingKeys.has(`${shortName}-index`), formatOk)) {
       counts.skipped += 1;
       continue;
     }
@@ -254,19 +342,75 @@ async function main() {
       continue;
     }
     const index = { repository: fullName, repository_short_name: shortName, branches: branchesData };
-    await cfKvPut(cfAccount, cfNamespace, cfToken, `${shortName}-index`, index, dryRun);
+    // Chunks first, legacy envelope second: a reader must never follow a plan that points at a chunk
+    // that has not landed yet, and the envelope keeps old workers (and rollbacks) functional
+    const writes = buildChunkWrites({ fullName, shortName }, branchesData);
+    for (const c of writes.chunks) {
+      await cfKvPut(cfAccount, cfNamespace, cfToken, c.key, c.value, dryRun);
+    }
+    if (!skipLegacy) {
+      await cfKvPut(cfAccount, cfNamespace, cfToken, `${shortName}-index`, index, dryRun);
+    }
+    for (const c of writes.chunks) {
+      newChunks.push({ k: c.key, r: fullName, rs: shortName, b: c.branch, n: c.n });
+    }
+    newRepos.push(writes.repo);
+    rebuilt.add(fullName);
+    counts.chunks += writes.chunks.length;
     if (!dryRun) shaTable[fullName] = current;
     counts.updated += 1;
   }
 
-  // Prune stale keys: -index suffixed but no longer discovered (repo-info-cache and friends stay untouched)
-  for (const key of existingKeys) {
-    if (key.endsWith("-index") && !discoveredKeys.has(key)) {
+  // Plan assembly: fresh entries for rebuilt repos; carried-over entries for the rest (full runs carry
+  // only repos that are still discovered, single runs keep everything they did not touch)
+  const carriedRepos = [];
+  if (prevPlan) {
+    for (const rp of prevPlan.repos) {
+      if (rebuilt.has(rp.r)) continue;
+      if (only.size === 0 && !discoveredKeys.has(`${rp.rs}-index`)) continue;
+      carriedRepos.push(rp);
+    }
+  }
+  const carriedNames = new Set(carriedRepos.map((rp) => rp.r));
+  const carriedChunks = (prevPlan?.chunks ?? []).filter((c) => carriedNames.has(c.r));
+  const byText = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const chunkNumber = (k) => Number(k.slice(k.lastIndexOf("@") + 1));
+  const plan = {
+    v: FORMAT_VERSION,
+    chunks: [...newChunks, ...carriedChunks].sort(
+      (a, b) => byText(a.rs, b.rs) || byText(a.b, b.b) || chunkNumber(a.k) - chunkNumber(b.k),
+    ),
+    repos: [...newRepos, ...carriedRepos].sort((a, b) => byText(a.rs, b.rs)),
+    ts: Date.now(),
+  };
+  await cfKvPut(cfAccount, cfNamespace, cfToken, PLAN_KEY, plan, dryRun);
+
+  // Prune runs only on full syncs (single-repo runs must never touch other repos' keys): the plan is
+  // written first, so a plan never references a chunk that this same run is about to delete
+  if (only.size === 0) {
+    const pruneList = computePruneList(
+      existingKeys,
+      plan.chunks,
+      plan.repos.map((rp) => `${rp.rs}-index`),
+    );
+    for (const key of pruneList) {
       await cfKvDelete(cfAccount, cfNamespace, cfToken, key, dryRun);
       counts.pruned += 1;
     }
+  } else {
+    // Single-repo runs may still drop this repo's own orphaned chunks from an earlier, longer run
+    const freshKeys = new Set(newChunks.map((c) => c.k));
+    for (const c of prevPlan?.chunks ?? []) {
+      if (rebuilt.has(c.r) && !freshKeys.has(c.k)) {
+        await cfKvDelete(cfAccount, cfNamespace, cfToken, c.k, dryRun);
+        counts.pruned += 1;
+      }
+    }
   }
 
+  // Only a successful full run may mark the stored format: a single-repo run that set it would make
+  // the next full run skip repositories that never got chunked
+  if (only.size === 0 && !dryRun) shaTable[FORMAT_KEY] = FORMAT_VERSION;
   if (!dryRun) await cfKvPut(cfAccount, cfNamespace, cfToken, SHA_TABLE_KEY, shaTable, dryRun);
 
   // Repo list snapshot: overwritten on full sync, unfiltered (matches the old Worker direct-query behavior); skipped on manual single-repo runs to avoid accidental deletion
@@ -286,10 +430,11 @@ async function main() {
   }
 
   const seconds = Math.round((Date.now() - startedAt) / 1000);
-  const tally = `${counts.updated} updated · ${counts.skipped} skipped · ${counts.warned} warned · ${counts.pruned} pruned · ${seconds}s`;
+  const tally = `${counts.updated} updated · ${counts.chunks} chunks · ${counts.skipped} skipped · ${counts.warned} warned · ${counts.pruned} pruned · ${seconds}s`;
   say(
     cyan(`${counts.total} repos: `) +
       green(`${counts.updated} updated`) +
+      gray(` · ${counts.chunks} chunk writes`) +
       gray(` · ${counts.skipped} skipped`) +
       yellow(` · ${counts.warned} warned · ${counts.pruned} pruned`) +
       cyan(` · ${seconds}s`),
