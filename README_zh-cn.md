@@ -165,7 +165,7 @@ pnpm deploy         # 构建前端并部署 Worker
 
 ## 统计
 
-[![Star History Chart](https://api.star-history.com/chart?repos=jy-eggroll/repodex&type=date&legend=top-left)](https://www.star-history.com/?repos=jy-eggroll%2Frepodex&type=date&legend=top-left)
+[![RepoStars](https://repostars.dev/api/embed?repo=Jy-EggRoll%2Frepodex&theme=light)](https://repostars.dev/?repos=Jy-EggRoll%2Frepodex&theme=light)
 
 ## 鸣谢
 

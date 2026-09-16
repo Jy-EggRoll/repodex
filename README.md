@@ -176,7 +176,7 @@ Run `pnpm check` before committing; CI (`.github/workflows/check.yml`) runs the 
 
 ## Stats
 
-[![Star History Chart](https://api.star-history.com/chart?repos=jy-eggroll/repodex&type=date&legend=top-left)](https://www.star-history.com/?repos=jy-eggroll%2Frepodex&type=date&legend=top-left)
+[![RepoStars](https://repostars.dev/api/embed?repo=Jy-EggRoll%2Frepodex&theme=light)](https://repostars.dev/?repos=Jy-EggRoll%2Frepodex&theme=light)
 
 ## Acknowledgments
 
