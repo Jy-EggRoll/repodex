@@ -55,6 +55,6 @@ describe("buildFileParam", () => {
   });
 
   it("partial selection joins with commas", () => {
-    expect(buildFileParam(["a-index", "c-index"], 3)).toBe("a-index,c-index");
+    expect(buildFileParam(["owner/a", "owner/c"], 3)).toBe("owner/a,owner/c");
   });
 });

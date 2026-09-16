@@ -19,7 +19,7 @@ describe("generate_index -> search-core contract", () => {
       buildBranchItems("dev", [{ path: "说明.md", type: "blob", size: 0 }]),
       buildBranchItems("main", TREE),
     ];
-    const { chunks, repo } = buildChunkWrites({ fullName: "o/r", shortName: "r" }, branches);
+    const { chunks, repo } = buildChunkWrites({ fullName: "o/r" }, branches);
     const decoded = chunks.flatMap((c) => decodeChunk(JSON.stringify(c.value), "o/r", c.branch));
 
     expect(decoded).toEqual([
@@ -44,13 +44,13 @@ describe("generate_index -> search-core contract", () => {
         type: "directory",
       },
     ]);
-    expect(repo).toEqual({ r: "o/r", rs: "r", n: decoded.length });
+    expect(repo).toEqual({ r: "o/r", n: decoded.length });
     expect(chunks.reduce((sum, c) => sum + c.n, 0)).toBe(decoded.length);
   });
 
   it("directory tuples derive the name and keep size undefined", () => {
     const branches = [buildBranchItems("main", TREE)];
-    const { chunks } = buildChunkWrites({ fullName: "o/r", shortName: "r" }, branches);
+    const { chunks } = buildChunkWrites({ fullName: "o/r" }, branches);
     const decoded = chunks.flatMap((c) => decodeChunk(JSON.stringify(c.value), "o/r", c.branch));
 
     expect(decoded.filter((e) => e.type === "directory")).toEqual([

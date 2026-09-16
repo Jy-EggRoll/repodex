@@ -11,7 +11,7 @@ import { t } from "./i18n";
 const DEMO_GITHUB = "https://github.com/Jy-EggRoll/repodex";
 
 export function listIndexes(): string[] {
-  return buildDemoCorpus().map((r) => `${r.repository_short_name}-index`);
+  return buildDemoCorpus().map((r) => r.repository);
 }
 
 export function listRepos(): RepoInfo[] {
@@ -54,7 +54,7 @@ export async function searchIndexes(
   let itemsTotal = 0;
 
   for (const repo of buildDemoCorpus()) {
-    const key = `${repo.repository_short_name}-index`;
+    const key = repo.repository;
     if (wanted && !wanted.has(key)) continue;
     indexCount += 1;
     for (const br of repo.branches) {

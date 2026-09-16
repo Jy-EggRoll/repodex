@@ -1,16 +1,19 @@
 // Central index generator: discover repos -> compare SHAs -> build incremental indexes -> push to KV -> prune stale keys.
 //
-// The index lives in chunked v2 keys: `<short>-index@<i>` chunks plus a `__meta-plan` manifest the
-// Worker reads. Chunks are never mixed across repositories, which keeps stale-plan reads safe. Any
-// bare `<short>-index` envelope still in KV (the retired legacy format) is deleted by the prune pass
-// of a full run.
+// The index lives in chunked v3 keys: `<owner>/<repo>@<i>` chunks plus a `__meta-plan` manifest the
+// Worker reads. Chunks are never mixed across repositories, which keeps stale-plan reads safe. Keys
+// left over from retired formats (`<short>-index@<i>` chunks and bare `<short>-index` envelopes) are
+// deleted by the prune pass of a full run.
 //
 // Plan repo entries also record each repository's last push time (epoch ms), which readers turn into
 // a bounded recency boost when ranking. The data comes from the repo list fetched below, so it costs
 // no extra API calls.
 //
 // Zero dependencies (Node 18+ built-in fetch). Required environment variables:
-//   REPOS_PAT        GitHub fine-grained PAT (Contents: read-only + Metadata: read-only, all repositories)
+//   REPOS_PAT        GitHub token that can read every indexed repository. Discovery covers personal
+//                    repos, organization repos, and repos where you are a collaborator. A classic PAT
+//                    with `repo` scope reaches all of them; a fine-grained token (Contents + Metadata
+//                    read-only) reaches only personal repos plus organizations that approved it
 //   CF_API_TOKEN     Cloudflare API Token (needs Workers KV Storage write permission)
 //   CF_ACCOUNT_ID    Cloudflare Account ID
 //   CF_NAMESPACE_ID  Cloudflare KV Namespace ID
@@ -26,9 +29,9 @@ const PLAN_KEY = "__meta-plan";
 // and only a successful full run may write it (single-repo runs must not, or the next full run would
 // happily skip repositories that never got chunked)
 const FORMAT_KEY = "__format";
-const FORMAT_VERSION = 2;
+const FORMAT_VERSION = 3;
 const CHUNK_ITEMS = 20000;
-const CHUNK_KEY_RE = /-index@\d+$/;
+const CHUNK_KEY_RE = /@\d+$/;
 
 // Terminal colors go to stderr only (console logs); stdout is reserved for clean markdown in the Summary
 const paint = (code) => (s) => (process.env.NO_COLOR === "1" ? s : `\x1b[${code}m${s}\x1b[0m`);
@@ -192,7 +195,7 @@ export function buildChunkWrites(repo, branches) {
     for (let i = 0; i < items.length; i += CHUNK_ITEMS) {
       const slice = items.slice(i, i + CHUNK_ITEMS);
       chunks.push({
-        key: `${repo.shortName}-index@${index}`,
+        key: `${repo.fullName}@${index}`,
         branch: branch.branch,
         n: slice.length,
         value: encodeChunk(slice),
@@ -201,12 +204,13 @@ export function buildChunkWrites(repo, branches) {
       total += slice.length;
     }
   }
-  return { chunks, repo: { r: repo.fullName, rs: repo.shortName, n: total } };
+  return { chunks, repo: { r: repo.fullName, n: total } };
 }
 
 /**
- * Keys to delete after a full run: chunks the new plan does not reference, plus every bare `-index`
- * envelope (the retired legacy format; nothing reads or writes it anymore). __meta-* is never touched.
+ * Keys to delete after a full run: chunks the new plan does not reference (any `@<i>` key, which
+ * covers stale chunks of current and retired formats), plus every bare `-index` envelope (the
+ * retired legacy format; nothing reads or writes it anymore). __meta-* is never touched.
  * Single-repo runs must not use this (it would prune every other repo).
  */
 export function computePruneList(existingKeys, planChunks) {
@@ -286,7 +290,7 @@ async function main() {
       : null;
   // Repos the plan records as empty (n=0): they have no chunk to key off, so the plan itself marks them indexed
   const plannedEmpty = new Set(
-    (prevPlan?.repos ?? []).filter((rp) => rp && rp.n === 0 && rp.rs).map((rp) => rp.rs),
+    (prevPlan?.repos ?? []).filter((rp) => rp && rp.n === 0 && rp.r).map((rp) => rp.r),
   );
 
   // Log split: the tally goes to stderr (colored console), the report to stdout (clean markdown for the Summary); output never contains repo names
@@ -299,7 +303,11 @@ async function main() {
   const newRepos = [];
   const rebuilt = new Set();
 
-  const repos = await ghRequest("/user/repos?affiliation=owner&sort=full_name", ghToken);
+  // All three affiliations: personal repos, organization repos, and repos where you are a collaborator
+  const repos = await ghRequest(
+    "/user/repos?affiliation=owner,collaborator,organization_member&sort=full_name",
+    ghToken,
+  );
   // Last-push table for the plan (free: already in the repo list response); missing repos keep their previous value
   const pushedAt = new Map();
   for (const repo of repos) {
@@ -315,8 +323,7 @@ async function main() {
       counts.skipped += 1;
       continue;
     }
-    const shortName = fullName.split("/").pop();
-    discoveredKeys.add(`${shortName}-index`);
+    discoveredKeys.add(fullName);
 
     const branchList = await ghRequest(`/repos/${fullName}/branches`, ghToken, "branches");
     const current = Object.fromEntries(
@@ -327,7 +334,7 @@ async function main() {
       continue;
     }
     // A repo counts as indexed when its first chunk exists, or the plan records it as empty (n=0)
-    const keyExists = existingKeys.has(`${shortName}-index@0`) || plannedEmpty.has(shortName);
+    const keyExists = existingKeys.has(`${fullName}@0`) || plannedEmpty.has(fullName);
     if (shouldSkip(shaTable[fullName], current, keyExists, formatOk)) {
       counts.skipped += 1;
       continue;
@@ -353,12 +360,12 @@ async function main() {
     }
     // Chunks land before the plan is rewritten: a reader must never follow a plan that points at a
     // chunk that has not landed yet
-    const writes = buildChunkWrites({ fullName, shortName }, branches);
+    const writes = buildChunkWrites({ fullName }, branches);
     for (const c of writes.chunks) {
       await cfKvPut(cfAccount, cfNamespace, cfToken, c.key, c.value, dryRun);
     }
     for (const c of writes.chunks) {
-      newChunks.push({ k: c.key, r: fullName, rs: shortName, b: c.branch, n: c.n });
+      newChunks.push({ k: c.key, r: fullName, b: c.branch, n: c.n });
     }
     newRepos.push(writes.repo);
     rebuilt.add(fullName);
@@ -373,7 +380,7 @@ async function main() {
   if (prevPlan) {
     for (const rp of prevPlan.repos) {
       if (rebuilt.has(rp.r)) continue;
-      if (only.size === 0 && !discoveredKeys.has(`${rp.rs}-index`)) continue;
+      if (only.size === 0 && !discoveredKeys.has(rp.r)) continue;
       carriedRepos.push(rp);
     }
   }
@@ -384,9 +391,9 @@ async function main() {
   const plan = {
     v: FORMAT_VERSION,
     chunks: [...newChunks, ...carriedChunks].sort(
-      (a, b) => byText(a.rs, b.rs) || byText(a.b, b.b) || chunkNumber(a.k) - chunkNumber(b.k),
+      (a, b) => byText(a.r, b.r) || byText(a.b, b.b) || chunkNumber(a.k) - chunkNumber(b.k),
     ),
-    repos: attachPushedAt([...newRepos, ...carriedRepos], pushedAt).sort((a, b) => byText(a.rs, b.rs)),
+    repos: attachPushedAt([...newRepos, ...carriedRepos], pushedAt).sort((a, b) => byText(a.r, b.r)),
     ts: Date.now(),
   };
   await cfKvPut(cfAccount, cfNamespace, cfToken, PLAN_KEY, plan, dryRun);
@@ -400,13 +407,13 @@ async function main() {
       counts.pruned += 1;
     }
   } else {
-    // Single-repo runs only drop this repo's own superseded keys: orphaned chunks from an earlier,
-    // longer run plus the retired envelope
+    // Single-repo runs only drop this repo's own superseded chunks: orphans from an earlier, longer
+    // run (retired-format leftovers are cleaned up by the next full run)
     const freshKeys = new Set(newChunks.map((c) => c.k));
-    const rebuiltShorts = [...new Set(newRepos.map((rp) => rp.rs))];
+    const rebuiltRepos = [...new Set(newRepos.map((rp) => rp.r))];
     for (const key of existingKeys) {
-      for (const rs of rebuiltShorts) {
-        if ((key === `${rs}-index` || key.startsWith(`${rs}-index@`)) && !freshKeys.has(key)) {
+      for (const r of rebuiltRepos) {
+        if (key.startsWith(`${r}@`) && !freshKeys.has(key)) {
           await cfKvDelete(cfAccount, cfNamespace, cfToken, key, dryRun);
           counts.pruned += 1;
           break;

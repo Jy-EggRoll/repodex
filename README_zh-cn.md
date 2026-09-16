@@ -48,13 +48,13 @@ RepoDex（RepositoryIndex——仓库索引聚合）：基于 GitHub Actions、C
 
 只需一个 Cloudflare 账号（无需绑卡），按下面 5 步走完即上线。全部密钥共 6 个，先总览（细则见各步）：
 
-| Secret            | 配在哪里                 | 用途                                   |
-| ----------------- | ------------------------ | -------------------------------------- |
-| `CF_ACCOUNT_ID`   | 本仓库 Actions Secrets   | KV 地址                                |
-| `CF_NAMESPACE_ID` | 本仓库 Actions Secrets   | KV 地址                                |
-| `CF_API_TOKEN`    | 本仓库 Actions Secrets   | 写 KV（需 Workers KV Storage 写权限）  |
-| `REPOS_PAT`       | 本仓库 Actions Secrets   | 中央索引读取仓库文件树（细粒度，只读） |
-| `USER` / `PSWD`   | Workers 变量（选“密钥”） | 站点登录                               |
+| Secret            | 配在哪里                 | 用途                                              |
+| ----------------- | ------------------------ | ------------------------------------------------- |
+| `CF_ACCOUNT_ID`   | 本仓库 Actions Secrets   | KV 地址                                           |
+| `CF_NAMESPACE_ID` | 本仓库 Actions Secrets   | KV 地址                                           |
+| `CF_API_TOKEN`    | 本仓库 Actions Secrets   | 写 KV（需 Workers KV Storage 写权限）             |
+| `REPOS_PAT`       | 本仓库 Actions Secrets   | 中央索引读取仓库文件树（经典 token，`repo` 权限） |
+| `USER` / `PSWD`   | Workers 变量（选“密钥”） | 站点登录                                          |
 
 ### 1. Fork 与绑定
 
@@ -90,7 +90,11 @@ RepoDex（RepositoryIndex——仓库索引聚合）：基于 GitHub Actions、C
 
 ### 3. GitHub 侧一个 Token
 
-- **`REPOS_PAT`**（细粒度 token，只开 Contents 只读 + Metadata 只读，Repository access 选 All repositories，覆盖未来新仓库）：给中央索引读取各仓库文件树，并顺手生成仓库列表快照（含私有）。地址：<https://github.com/settings/personal-access-tokens/new>。注意：Actions 默认 `GITHUB_TOKEN` 只能读本仓库，跨仓读取必须配此项。
+- **`REPOS_PAT`**（经典 token，勾选 `repo` 权限——细粒度 token 无法读取协作仓库）：给中央索引读取各仓库文件树，并顺手生成仓库列表快照，涵盖个人仓库、组织仓库与你作为 collaborator 的仓库（含私有）。地址：<https://github.com/settings/tokens/new>。注意：Actions 默认 `GITHUB_TOKEN` 只能读本仓库，跨仓读取必须配此项。
+
+> [!NOTE]
+>
+> 部分组织会禁用经典 token（需在组织设置中放行）；启用 SAML 的组织需要一次性授权该 token。经典 `repo` 权限为读写权限，请仅存放在 Actions secrets 中，并定期轮换。
 
 > [!CAUTION]
 >
@@ -100,7 +104,7 @@ RepoDex（RepositoryIndex——仓库索引聚合）：基于 GitHub Actions、C
 
 中央工作流（`.github/workflows/central-index.yml`）统一生成索引，**各仓库无需任何配置**：
 
-- 自动发现：每小时整点扫描名下所有仓库（归档/禁用跳过），对比分支 SHA，只处理有变化的仓库，无变化直接跳过（不输出仓库名）。
+- 自动发现：每小时整点扫描你的全部仓库（个人、组织、协作，归档/禁用跳过），对比分支 SHA，只处理有变化的仓库，无变化直接跳过（不输出仓库名）。
 - 黑名单：`repos-blocklist.txt` 加一行 `owner/repo` 即可排除。
 - 手动补跑：Actions → Central Repository Index → Run workflow（可指定单个仓库、可 dry-run 只出统计预览）。
 - 删库清理：仓库删除后索引 key 自动清理。首次运行全量 backfill，之后增量。
@@ -127,14 +131,14 @@ RepoDex（RepositoryIndex——仓库索引聚合）：基于 GitHub Actions、C
 
 工作流的任务：
 
-每小时整点（或手动触发）扫描名下所有仓库，对比 KV 中记录的分支 SHA，只对有变化的仓库拉取文件树、生成统一的全局索引并推送至 Cloudflare KV 存储，同时清理已删除仓库的僵尸索引（旧版单文件格式的残留 key 也会一并清掉）。
+每小时整点（或手动触发）扫描名下所有仓库，对比 KV 中记录的分支 SHA，只对有变化的仓库拉取文件树、生成统一的全局索引并推送至 Cloudflare KV 存储，同时清理已删除仓库的僵尸索引（旧版索引格式的残留 key 也会一并清掉）。
 
 搜索由 Durable Object 执行（免费版下其 30s CPU 预算取代了普通 Worker 的 10ms 上限），按批加载索引分片——语料规模不再引发 503。
 
 KV 中的 key 布局（均为有意设计）：
 
 - `__meta-plan`：分片清单 + 仓库列表，Worker 读取的唯一事实源（搜索与索引列表）
-- `{仓库短名}-index@{i}`：仓库索引分片（每片 ≤ 20000 条，绝不跨仓混装）
+- `{owner}/{repo}@{i}`：仓库索引分片（每片 ≤ 20000 条，绝不跨仓混装）
 - `repo-info-cache`：仓库列表快照，每小时由中央索引覆盖，Worker 只读
 - `__meta-sha-table`：分支 SHA 记录表，变化检测用
 

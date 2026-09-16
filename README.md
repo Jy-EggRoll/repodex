@@ -61,13 +61,13 @@ Repository risk badges: `>900MB` danger, `800–900MB` warning, `<800MB` safe. Y
 
 All you need is one Cloudflare account (no credit card required). Five steps, six secrets total — overview first (details in each step):
 
-| Secret            | Where to set                     | Purpose                                                              |
-| ----------------- | -------------------------------- | -------------------------------------------------------------------- |
-| `CF_ACCOUNT_ID`   | This repo, Actions secrets       | KV endpoint                                                          |
-| `CF_NAMESPACE_ID` | This repo, Actions secrets       | KV endpoint                                                          |
-| `CF_API_TOKEN`    | This repo, Actions secrets       | Writes to KV (needs Workers KV Storage write permission)             |
-| `REPOS_PAT`       | This repo, Actions secrets       | Reads repo file trees for central indexing (fine-grained, read-only) |
-| `USER` / `PSWD`   | Worker variables ("secret" type) | Site login                                                           |
+| Secret            | Where to set                     | Purpose                                                                  |
+| ----------------- | -------------------------------- | ------------------------------------------------------------------------ |
+| `CF_ACCOUNT_ID`   | This repo, Actions secrets       | KV endpoint                                                              |
+| `CF_NAMESPACE_ID` | This repo, Actions secrets       | KV endpoint                                                              |
+| `CF_API_TOKEN`    | This repo, Actions secrets       | Writes to KV (needs Workers KV Storage write permission)                 |
+| `REPOS_PAT`       | This repo, Actions secrets       | Reads repo file trees for central indexing (classic token, `repo` scope) |
+| `USER` / `PSWD`   | Worker variables ("secret" type) | Site login                                                               |
 
 ### 1. Fork and connect
 
@@ -103,7 +103,11 @@ Create a token with the Workers KV Storage permission. It is shown only once (= 
 
 ### 3. One token on the GitHub side
 
-- **`REPOS_PAT`** (fine-grained token: Contents read-only + Metadata read-only; Repository access: All repositories so future repos are covered): used by central indexing to read file trees and snapshot the repository list (private repos included). Create it at <https://github.com/settings/personal-access-tokens/new>. Note: the default Actions `GITHUB_TOKEN` can only read this repository, so cross-repo reads require this secret.
+- **`REPOS_PAT`** (classic token with the `repo` scope — fine-grained tokens cannot read collaborator repos): used by central indexing to read file trees and snapshot the repository list, covering personal repos, organization repos, and repos you are a collaborator on (private repos included). Create it at <https://github.com/settings/tokens/new>. Note: the default Actions `GITHUB_TOKEN` can only read this repository, so cross-repo reads require this secret.
+
+> [!NOTE]
+>
+> Some organizations block classic tokens (allow them in the org settings), and SAML organizations need a one-time token authorization. The classic `repo` scope is read-write — store the token in Actions secrets only and rotate it periodically.
 
 > [!CAUTION]
 >
@@ -113,7 +117,7 @@ Create a token with the Workers KV Storage permission. It is shown only once (= 
 
 The central workflow (`.github/workflows/central-index.yml`) generates every index — **no per-repo configuration**:
 
-- Auto-discovery: scans all repositories at the top of every hour (archived/disabled skipped), compares branch SHAs, and processes only changed repositories; the rest are skipped without any per-repo output.
+- Auto-discovery: scans all of your repositories — personal, organization, and collaborator — at the top of every hour (archived/disabled skipped), compares branch SHAs, and processes only changed repositories; the rest are skipped without any per-repo output.
 - Blocklist: add one `owner/repo` line to `repos-blocklist.txt` to exclude a repository.
 - Manual runs: Actions → Central Repository Index → Run workflow (optionally a single repo, or a dry-run preview that only reports counts).
 - Cleanup: indexes of deleted repositories are pruned automatically. The first run backfills everything; later runs are incremental.
@@ -138,14 +142,14 @@ Smoke test: ① the home page loads and login works ② a keyword returns result
 
 An automation workflow in this repository (`.github/workflows/central-index.yml` + `scripts/generate_index.mjs`, zero dependencies, using the fetch built into Node 24).
 
-Every hour (or on manual dispatch) it scans all repositories, compares branch SHAs against the KV record, pulls file trees and merges the global index only for changed repositories, writes it into Cloudflare KV, and prunes indexes of deleted repositories (leftover keys from the retired single-file format are cleaned up too).
+Every hour (or on manual dispatch) it scans all repositories, compares branch SHAs against the KV record, pulls file trees and merges the global index only for changed repositories, writes it into Cloudflare KV, and prunes indexes of deleted repositories (leftover keys from retired index formats are cleaned up too).
 
 Search is served by a Durable Object (its 30s CPU budget replaces the 10ms Worker limit on the free plan), which loads index chunks in batches — corpus size no longer causes 503s.
 
 KV key layout (all intentional):
 
 - `__meta-plan` — chunk manifest + repository list; the single source of truth the Worker reads for search and the index list
-- `{repo-short-name}-index@{i}` — per-repository index chunk (≤ 20,000 entries each; repositories are never mixed in a chunk)
+- `{owner}/{repo}@{i}` — per-repository index chunk (≤ 20,000 entries each; repositories are never mixed in a chunk)
 - `repo-info-cache` — repository list snapshot, rewritten hourly by central indexing (the Worker only reads it)
 - `__meta-sha-table` — branch SHA table for change detection
 

@@ -91,7 +91,7 @@ describe("encodeChunk", () => {
 });
 
 describe("buildChunkWrites", () => {
-  const repo = { fullName: "o/r", shortName: "r" };
+  const repo = { fullName: "o/r" };
 
   it("chunks stay inside one branch and slice at the item cap", () => {
     const items = Array.from({ length: 20001 }, (_, i) => ({ type: "file", path: `f${i}`, size: i }));
@@ -108,11 +108,11 @@ describe("buildChunkWrites", () => {
     const { chunks, repo: ref } = buildChunkWrites(repo, branches);
 
     expect(chunks.map((c) => [c.key, c.branch, c.n])).toEqual([
-      ["r-index@0", "main", 20000],
-      ["r-index@1", "main", 1],
-      ["r-index@2", "dev", 2],
+      ["o/r@0", "main", 20000],
+      ["o/r@1", "main", 1],
+      ["o/r@2", "dev", 2],
     ]);
-    expect(ref).toEqual({ r: "o/r", rs: "r", n: 20003 });
+    expect(ref).toEqual({ r: "o/r", n: 20003 });
     expect(chunks[0].value[0]).toEqual([0, "f0", 0]);
     expect(chunks[1].value[0]).toEqual([0, "f20000", 20000]);
     expect(chunks[2].value[1]).toEqual([1, "dir"]);
@@ -135,40 +135,38 @@ describe("buildChunkWrites", () => {
   it("an empty repository yields no chunks but keeps a repo ref", () => {
     const { chunks, repo: ref } = buildChunkWrites(repo, [{ branch: "main", items: [] }]);
     expect(chunks).toEqual([]);
-    expect(ref).toEqual({ r: "o/r", rs: "r", n: 0 });
+    expect(ref).toEqual({ r: "o/r", n: 0 });
   });
 });
 
 describe("attachPushedAt", () => {
   it("fills t from the map and keeps a previously stored value on a map miss", () => {
     const map = new Map([["o/a", 111]]);
-    expect(attachPushedAt([{ r: "o/a", rs: "a", n: 3 }], map)).toEqual([{ r: "o/a", rs: "a", n: 3, t: 111 }]);
-    expect(attachPushedAt([{ r: "o/b", rs: "b", n: 3, t: 222 }], map)).toEqual([
-      { r: "o/b", rs: "b", n: 3, t: 222 },
-    ]);
+    expect(attachPushedAt([{ r: "o/a", n: 3 }], map)).toEqual([{ r: "o/a", n: 3, t: 111 }]);
+    expect(attachPushedAt([{ r: "o/b", n: 3, t: 222 }], map)).toEqual([{ r: "o/b", n: 3, t: 222 }]);
   });
 
   it("does not mutate the input and tolerates a missing list", () => {
-    const input = [{ r: "o/a", rs: "a", n: 1 }];
+    const input = [{ r: "o/a", n: 1 }];
     attachPushedAt(input, new Map([["o/a", 5]]));
-    expect(input).toEqual([{ r: "o/a", rs: "a", n: 1 }]);
+    expect(input).toEqual([{ r: "o/a", n: 1 }]);
     expect(attachPushedAt(undefined, new Map())).toEqual([]);
   });
 });
 
 describe("computePruneList", () => {
-  it("deletes stale chunks and every bare envelope, keeps planned chunks, and never touches __meta-*", () => {
+  it("deletes stale chunks (current and retired formats) and every bare envelope, keeps planned chunks, and never touches __meta-*", () => {
     const existing = [
-      "r1-index",
-      "r1-index@0",
-      "r1-index@9",
-      "r2-index",
-      "r2-index@0",
+      "legacy-index",
+      "legacy-index@0",
+      "o/r1@0",
+      "o/r1@9",
+      "o/r2@0",
       "__meta-plan",
       "__meta-sha-table",
     ];
-    const prune = computePruneList(existing, [{ k: "r1-index@0" }]);
-    expect(prune).toEqual(["r1-index", "r1-index@9", "r2-index", "r2-index@0"]);
+    const prune = computePruneList(existing, [{ k: "o/r1@0" }]);
+    expect(prune).toEqual(["legacy-index", "legacy-index@0", "o/r1@9", "o/r2@0"]);
   });
 
   it("leaves unrelated keys alone", () => {
@@ -177,6 +175,6 @@ describe("computePruneList", () => {
 
   it("REPOS_ONLY-style calls with nothing planned prune everything else, so main() must guard the call", () => {
     // Documents the blast radius: this is exactly why single-repo runs never call computePruneList
-    expect(computePruneList(["a-index", "b-index@0"], [])).toEqual(["a-index", "b-index@0"]);
+    expect(computePruneList(["o/a@0", "o/b@0"], [])).toEqual(["o/a@0", "o/b@0"]);
   });
 });

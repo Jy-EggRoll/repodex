@@ -32,25 +32,24 @@ export const SCORE_CAP = 1000;
 export const LOAD_CONCURRENCY = 6;
 export const PLAN_KEY = "__meta-plan";
 
-/** One index chunk: KV key, repository full/short name, branch name, item count. */
+/** One index chunk: KV key, repository full name (owner/repo), branch name, item count. */
 export interface PlanChunk {
   k: string;
   r: string;
-  rs: string;
   b: string;
   n: number;
 }
 
-/** One repository present in the index (n=0 marks "exists but empty" so it is not a 404; t = last push time, epoch ms). */
+/** One repository in the index, identified by full name (owner/repo); n=0 marks "exists but empty" so it is not a 404 (t = last push time, epoch ms). */
 export interface PlanRepo {
   r: string;
-  rs: string;
   n: number;
   t?: number;
 }
 
 export interface SearchPlan {
-  v: 2;
+  // v3 writes `owner/repo` identifiers; v2 plans (short-name identifiers) are still served during the migration window
+  v: 2 | 3;
   chunks: PlanChunk[];
   repos: PlanRepo[];
   ts: number;
@@ -102,10 +101,10 @@ export function parsePlan(text: string | null): SearchPlan | null {
   if (!text) return null;
   try {
     const raw = JSON.parse(text) as { v?: unknown; chunks?: unknown; repos?: unknown; ts?: unknown };
-    if (!raw || typeof raw !== "object" || raw.v !== 2) return null;
+    if (!raw || typeof raw !== "object" || (raw.v !== 2 && raw.v !== 3)) return null;
     if (!Array.isArray(raw.chunks) || !Array.isArray(raw.repos)) return null;
     return {
-      v: 2,
+      v: raw.v,
       chunks: raw.chunks.filter(isPlanChunk),
       repos: raw.repos.filter(isPlanRepo),
       ts: typeof raw.ts === "number" ? raw.ts : 0,
@@ -119,18 +118,14 @@ function isPlanChunk(c: unknown): c is PlanChunk {
   if (!c || typeof c !== "object") return false;
   const o = c as Record<string, unknown>;
   return (
-    typeof o.k === "string" &&
-    typeof o.r === "string" &&
-    typeof o.rs === "string" &&
-    typeof o.b === "string" &&
-    typeof o.n === "number"
+    typeof o.k === "string" && typeof o.r === "string" && typeof o.b === "string" && typeof o.n === "number"
   );
 }
 
 function isPlanRepo(r: unknown): r is PlanRepo {
   if (!r || typeof r !== "object") return false;
   const o = r as Record<string, unknown>;
-  return typeof o.r === "string" && typeof o.rs === "string" && typeof o.n === "number";
+  return typeof o.r === "string" && typeof o.n === "number";
 }
 
 /** Chunk payload: [[t, path] | [t, path, size], ...]; t=0 file, t=1 directory; name is derived, size omitted for directories. */
@@ -196,7 +191,7 @@ export function targetLength(target: string): number {
 
 export function findPlanRepo(plan: SearchPlan, name: string): PlanRepo | null {
   for (const rp of plan.repos) {
-    if (rp.rs && `${rp.rs}-index` === name) return rp;
+    if (rp.r === name) return rp;
   }
   return null;
 }
@@ -207,6 +202,9 @@ export type Selection =
   | { kind: "list"; names: string[] }
   | { kind: "invalid" };
 
+// Index identifiers are repository full names (owner/repo): exactly one slash, non-empty sides
+const INDEX_NAME_RE = /^[^/]+\/[^/]+$/;
+
 /** Resolve the `file` parameter with the old quirks: "all"/empty means everything, single names may be invalid, lists drop bad entries and duplicate names. */
 export function resolveSelection(fileRaw: string, plan: SearchPlan): Selection {
   const file = (fileRaw || "all").trim();
@@ -216,19 +214,19 @@ export function resolveSelection(fileRaw: string, plan: SearchPlan): Selection {
     const names: string[] = [];
     for (const part of file.split(",")) {
       const name = part.trim();
-      if (!name || name.includes("..") || name.includes("/") || seen.has(name)) continue;
+      if (!INDEX_NAME_RE.test(name) || seen.has(name)) continue;
       seen.add(name);
       names.push(name);
     }
     return { kind: "list", names };
   }
-  if (file.includes("..") || file.includes("/")) return { kind: "invalid" };
+  if (!INDEX_NAME_RE.test(file)) return { kind: "invalid" };
   const rp = findPlanRepo(plan, file);
   return {
     kind: "single",
     name: file,
     known: rp !== null,
-    chunks: rp ? plan.chunks.filter((c) => c.rs === rp.rs) : [],
+    chunks: rp ? plan.chunks.filter((c) => c.r === rp.r) : [],
   };
 }
 
@@ -317,7 +315,7 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
         }
         itemsTotal += d.n;
         if (entries.length > 0) indexSet.add(d.r);
-        if (scanEntries(entries, recencyBoost(repoTs.get(d.rs), t0))) {
+        if (scanEntries(entries, recencyBoost(repoTs.get(d.r), t0))) {
           // Cap reached: account for the still-selected chunks from the plan so telemetry matches
           // the old "load the whole corpus first" behavior
           for (let k = done + j + 1; k < descs.length; k++) {
@@ -336,7 +334,7 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
     const plan = parsePlan(await get(PLAN_KEY).catch(() => null));
     if (!plan) return errorOutcome(503, "index not ready, run Central Repository Index workflow first");
     for (const rp of plan.repos) {
-      if (typeof rp.t === "number" && Number.isFinite(rp.t)) repoTs.set(rp.rs, rp.t);
+      if (typeof rp.t === "number" && Number.isFinite(rp.t)) repoTs.set(rp.r, rp.t);
     }
     const selection = resolveSelection(file, plan);
     if (selection.kind === "invalid") return errorOutcome(400, "invalid file");
@@ -350,7 +348,7 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
       for (const name of selection.names) {
         const rp = findPlanRepo(plan, name);
         if (!rp) continue; // unknown names are dropped silently, same as the old per-name loads
-        if (await loadChunks(plan.chunks.filter((c) => c.rs === rp.rs))) break;
+        if (await loadChunks(plan.chunks.filter((c) => c.r === rp.r))) break;
       }
     }
 
@@ -421,9 +419,9 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
   }
 }
 
-/** Index selector list for /api/repo-list: `${short}-index` tokens derived from the plan (empty before the first sync). */
+/** Index selector list for /api/repo-list: repository full names (owner/repo) from the plan (empty before the first sync). */
 export async function runRepoList(get: KvGet): Promise<Outcome> {
   const plan = parsePlan(await get(PLAN_KEY).catch(() => null));
-  const names = plan ? plan.repos.filter((rp) => rp.rs).map((rp) => `${rp.rs}-index`) : [];
+  const names = plan ? plan.repos.map((rp) => rp.r) : [];
   return { status: 200, json: JSON.stringify(names) };
 }
