@@ -66,7 +66,7 @@ function LanguageMenuItem({
 
 export default function App() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState("repos");
+  const [tab, setTab] = useState("search");
   const [setting, setSetting] = useState<ThemeSetting>("auto");
   const [lang, setLang] = useState<LanguageSetting>(loadLanguageSetting);
 
@@ -137,8 +137,8 @@ export default function App() {
               value={tab}
               onValueChange={setTab}
               tabs={[
-                { value: "repos", label: t("Repositories") },
                 { value: "search", label: t("File Search") },
+                { value: "repos", label: t("Repositories") },
               ]}
             />
             <DropdownMenu>
