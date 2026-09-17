@@ -19,6 +19,7 @@ export function listRepos(): RepoInfo[] {
     const size_mb = Math.round((r.sizeKb / 1024) * 100) / 100;
     return {
       name: r.repository_short_name,
+      full_name: r.repository,
       size: r.sizeKb,
       size_mb,
       risk: riskForSize(size_mb),

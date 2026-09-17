@@ -85,7 +85,7 @@ export default function RepoList() {
           <ResultCard
             key={repo.html_url}
             href={repo.html_url}
-            title={repo.name}
+            title={repo.full_name}
             subtitle={repo.description || ""}
             meta={formatRepoSize(repo)}
             badge={riskBadge(repo.risk)}

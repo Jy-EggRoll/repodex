@@ -2,6 +2,7 @@ import { t } from "./i18n";
 
 export interface RepoInfo {
   name: string;
+  full_name: string;
   size: number;
   size_mb: number;
   risk: "safe" | "warn" | "danger";

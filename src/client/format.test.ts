@@ -4,6 +4,7 @@ import { formatFileSize, formatRepoSize } from "./format";
 
 const repo = (size: number, size_mb: number): RepoInfo => ({
   name: "r",
+  full_name: "o/r",
   size,
   size_mb,
   risk: "safe",
