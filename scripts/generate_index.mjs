@@ -241,6 +241,7 @@ export function buildRepoInfo(repos) {
     const sizeMb = Math.round((sizeKb / 1024) * 100) / 100;
     infos.push({
       name: repo.name,
+      full_name: repo.full_name ?? "",
       size: sizeKb,
       size_mb: sizeMb,
       risk: sizeMb < 800 ? "safe" : sizeMb <= 900 ? "warn" : "danger",

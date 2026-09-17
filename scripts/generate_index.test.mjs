@@ -8,6 +8,7 @@ import {
   needsUpdate,
   parseBlocklist,
   shouldSkip,
+  buildRepoInfo,
 } from "./generate_index.mjs";
 
 describe("parseBlocklist", () => {
@@ -176,5 +177,33 @@ describe("computePruneList", () => {
   it("REPOS_ONLY-style calls with nothing planned prune everything else, so main() must guard the call", () => {
     // Documents the blast radius: this is exactly why single-repo runs never call computePruneList
     expect(computePruneList(["o/a@0", "o/b@0"], [])).toEqual(["o/a@0", "o/b@0"]);
+  });
+});
+
+describe("buildRepoInfo", () => {
+  it("includes full_name from repo data", () => {
+    const repos = [
+      {
+        name: "repo-a",
+        full_name: "owner/repo-a",
+        size: 819200,
+        description: null,
+        html_url: "https://github.com/owner/repo-a",
+      },
+    ];
+    const result = buildRepoInfo(repos);
+    expect(result[0].full_name).toBe("owner/repo-a");
+  });
+
+  it("skips repos without a valid name", () => {
+    const repos = [
+      { name: "", full_name: "", size: 100, description: null, html_url: "" },
+      { name: "valid", full_name: "owner/valid", size: 200, description: null, html_url: "" },
+    ];
+    expect(buildRepoInfo(repos)).toHaveLength(1);
+  });
+
+  it("handles undefined repos", () => {
+    expect(buildRepoInfo(undefined)).toEqual([]);
   });
 });
