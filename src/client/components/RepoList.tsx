@@ -27,7 +27,8 @@ function repoKey(item: FilteredRepo): string {
 export default function RepoList() {
   const { t } = useTranslation();
   const [repos, setRepos] = useState<RepoInfo[]>([]);
-  const [loading, setLoading] = useState(false);
+  // The skeleton owns the whole pre-load window; the empty state only shows once a load came back empty
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
 
@@ -53,7 +54,6 @@ export default function RepoList() {
   const [displayRepos, leavingKeys] = useListTransition(filteredRepos, repoKey);
 
   async function load() {
-    setLoading(true);
     setError("");
     try {
       const data = await fetchRepos();
@@ -62,7 +62,7 @@ export default function RepoList() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      setLoaded(true);
     }
   }
 
@@ -95,10 +95,10 @@ export default function RepoList() {
       <Fade show={!!error}>
         <ErrorNotice title={t("Load failed")} message={error} />
       </Fade>
-      <Fade show={!error && !loading && repos.length === 0} className="mt-6">
-        <Empty title={t("No repository data")} description={t("Fetching data")} />
+      <Fade show={loaded && !error && repos.length === 0} className="mt-6">
+        <Empty title={t("No repository data")} />
       </Fade>
-      {loading && repos.length === 0 && (
+      {!loaded && (
         <div className={`mt-6 ${RESULT_GRID}`}>
           {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
             <CardSkeleton key={i} />
@@ -107,7 +107,7 @@ export default function RepoList() {
       )}
 
       <Fade
-        show={!error && !loading && repos.length > 0 && displayRepos.length === 0}
+        show={loaded && !error && repos.length > 0 && displayRepos.length === 0}
         className="text-kumo-subtle mt-6 text-sm"
       >
         {t("No matching repositories")}
