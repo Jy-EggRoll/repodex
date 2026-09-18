@@ -21,16 +21,34 @@ import {
   type SearchResult,
 } from "../api";
 import { formatFileSize } from "../format";
+import { buildHighlighted } from "../../highlight";
+import { matchRanges } from "../../match";
+import { useEnterOnce, useListTransition } from "../hooks";
 import ResultCard from "./ResultCard";
 import ErrorNotice from "./ErrorNotice";
+
+const EMPTY_RESULTS: SearchResult[] = [];
+
+function resultKey(item: SearchResult): string {
+  return `${item.repository}\u0000${item.branch}\u0000${item.path}\u0000${item.type}`;
+}
 
 function titleHtml(item: SearchResult) {
   if (item.highlightedPath && item.highlightedPath !== "undefined") return item.highlightedPath;
   if (item.highlightedName && item.highlightedName !== "undefined") return item.highlightedName;
-  return item.name || "";
+  // Plain fallback still goes through the shared builder so the name is escaped like everywhere else
+  return buildHighlighted(item.name || "", []);
 }
 
-const ResultRow = memo(function ResultRow({ item, index }: { item: SearchResult; index: number }) {
+const ResultRow = memo(function ResultRow({
+  item,
+  index,
+  leaving,
+}: {
+  item: SearchResult;
+  index: number;
+  leaving: boolean;
+}) {
   const { t } = useTranslation();
   return (
     <ResultCard
@@ -39,6 +57,7 @@ const ResultRow = memo(function ResultRow({ item, index }: { item: SearchResult;
       subtitle={`${item.repository || ""} / ${item.branch || ""} — ${item.path || ""}`}
       meta={formatFileSize(item)}
       enterDelayMs={staggerDelayMs(index % PAGE_SIZE)}
+      leaving={leaving}
       badge={
         <Badge variant={item.type === "file" ? "info" : "primary"}>
           {item.type === "file" ? t("File") : t("Folder")}
@@ -47,6 +66,51 @@ const ResultRow = memo(function ResultRow({ item, index }: { item: SearchResult;
     />
   );
 });
+
+/** One selectable index; `html` carries the shared highlight for the current filter query. */
+interface IndexOption {
+  name: string;
+  html?: string;
+}
+
+function indexKey(option: IndexOption): string {
+  return option.name;
+}
+
+function IndexRow({
+  name,
+  html,
+  checked,
+  disabled,
+  leaving,
+  onToggle,
+}: {
+  name: string;
+  html?: string;
+  checked: boolean;
+  disabled: boolean;
+  leaving: boolean;
+  onToggle: (on: boolean) => void;
+}) {
+  const enter = useEnterOnce();
+  const animationClass = leaving ? "card-leave" : enter.entering ? "card-enter" : "";
+  return (
+    <div className={animationClass} onAnimationEnd={enter.onAnimationEnd}>
+      <Checkbox
+        label={
+          html !== undefined ? (
+            <span className="text-sm break-all" dangerouslySetInnerHTML={{ __html: html }} />
+          ) : (
+            <span className="text-sm break-all">{name}</span>
+          )
+        }
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={(v) => onToggle(v === true)}
+      />
+    </div>
+  );
+}
 
 function LoadingRow({ center = false, children }: { center?: boolean; children: ReactNode }) {
   return (
@@ -201,6 +265,7 @@ export default function Search() {
   }
 
   const hasMore = results !== null && results.length < total;
+  const [displayResults, leavingResultKeys] = useListTransition(results ?? EMPTY_RESULTS, resultKey);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -222,27 +287,36 @@ export default function Search() {
   }
 
   const [indexFilter, setIndexFilter] = useState("");
-  const filteredIndexes = useMemo(() => {
-    const kw = indexFilter.trim().toLowerCase();
-    return kw ? indexes.filter((n) => n.toLowerCase().includes(kw)) : indexes;
+  // Same matcher and highlight builder as the file search and the repo filter
+  const filteredIndexes = useMemo<IndexOption[]>(() => {
+    const kw = indexFilter.trim();
+    if (!kw) return indexes.map((name) => ({ name }));
+    const out: IndexOption[] = [];
+    for (const name of indexes) {
+      const ranges = matchRanges(name, kw);
+      if (ranges) out.push({ name, html: buildHighlighted(name, ranges) });
+    }
+    return out;
   }, [indexes, indexFilter]);
+  const [displayIndexes, leavingIndexKeys] = useListTransition(filteredIndexes, indexKey);
+  const filteredNames = useMemo(() => filteredIndexes.map((option) => option.name), [filteredIndexes]);
 
   function selectAll() {
-    const next = Array.from(new Set([...checked, ...filteredIndexes]));
+    const next = Array.from(new Set([...checked, ...filteredNames]));
     setChecked(next);
     searchFromInput(next);
   }
 
   function clearAll() {
-    const next = checked.filter((n) => !filteredIndexes.includes(n));
+    const next = checked.filter((n) => !filteredNames.includes(n));
     setChecked(next);
     searchFromInput(next);
   }
 
   function invertSelection() {
     const next = [
-      ...checked.filter((n) => !filteredIndexes.includes(n)),
-      ...filteredIndexes.filter((n) => !checked.includes(n)),
+      ...checked.filter((n) => !filteredNames.includes(n)),
+      ...filteredNames.filter((n) => !checked.includes(n)),
     ];
     setChecked(next);
     searchFromInput(next);
@@ -328,19 +402,20 @@ export default function Search() {
                 </div>
               </div>
               <div className={`bg-kumo-base ${DIALOG_MAX_H} overflow-auto rounded-lg p-2`}>
-                {filteredIndexes.length === 0 ? (
+                {displayIndexes.length === 0 ? (
                   <div className="text-kumo-subtle p-3 text-sm">{t("No matching indexes")}</div>
                 ) : (
                   <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
-                    {filteredIndexes.map((fname) => (
-                      <div key={fname}>
-                        <Checkbox
-                          label={<span className="text-sm break-all">{fname}</span>}
-                          checked={checked.includes(fname)}
-                          disabled={searching}
-                          onCheckedChange={(v) => toggleOne(fname, v === true)}
-                        />
-                      </div>
+                    {displayIndexes.map(({ name, html }) => (
+                      <IndexRow
+                        key={name}
+                        name={name}
+                        html={html}
+                        checked={checked.includes(name)}
+                        disabled={searching}
+                        leaving={leavingIndexKeys.has(name)}
+                        onToggle={(on) => toggleOne(name, on)}
+                      />
                     ))}
                   </div>
                 )}
@@ -413,13 +488,13 @@ export default function Search() {
             description={t("Press Enter or click the search button; match by name or path")}
           />
         )}
-        {results !== null && results.length === 0 && !searching && (
+        {results !== null && displayResults.length === 0 && !searching && (
           <Empty
             title={t("No matches found")}
             description={t("Try another keyword or adjust the index selection")}
           />
         )}
-        {results !== null && results.length > 0 && (
+        {displayResults.length > 0 && (
           <div>
             <h2 className="text-kumo-strong mb-2 text-lg font-semibold">
               {t("Results ({0}{1} total · {2} files / {3} folders)", {
@@ -441,7 +516,7 @@ export default function Search() {
                 <div className="text-kumo-subtle mt-1">
                   {t("Network round trip {0}ms · returned {1}/{2}", {
                     0: perf.roundTripMs,
-                    1: results.length,
+                    1: results?.length ?? 0,
                     2: total,
                   })}
                 </div>
@@ -455,18 +530,19 @@ export default function Search() {
               </div>
             )}
             <div className={RESULT_GRID}>
-              {results.map((item, i) => (
+              {displayResults.map((item, i) => (
                 <ResultRow
-                  key={`${item.repository}-${item.branch}-${item.path}-${item.type}-${i}`}
+                  key={resultKey(item)}
                   item={item}
                   index={i}
+                  leaving={leavingResultKeys.has(resultKey(item))}
                 />
               ))}
             </div>
             <div ref={sentinelRef} />
             {loadingMore && (
               <LoadingRow center>
-                {t("Loading more (showing {0} / {1} total)", { 0: results.length, 1: total })}
+                {t("Loading more (showing {0} / {1} total)", { 0: results?.length ?? 0, 1: total })}
               </LoadingRow>
             )}
           </div>

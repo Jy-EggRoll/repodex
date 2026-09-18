@@ -3,9 +3,23 @@ import { useTranslation } from "react-i18next";
 import { Badge, Empty, Input } from "@cloudflare/kumo";
 import { fetchRepos, type RepoInfo } from "../api";
 import { formatRepoSize } from "../format";
+import { buildHighlighted } from "../../highlight";
+import { matchRanges } from "../../match";
+import { useListTransition } from "../hooks";
 import ResultCard, { CardSkeleton } from "./ResultCard";
 import ErrorNotice from "./ErrorNotice";
 import { PAGE_TITLE, RESULT_GRID, SKELETON_COUNT, staggerDelayMs } from "../ui";
+
+/** A repo plus the shared highlight HTML for each searched field (undefined = no filter query). */
+interface FilteredRepo {
+  repo: RepoInfo;
+  titleHtml?: string;
+  subtitleHtml?: string;
+}
+
+function repoKey(item: FilteredRepo): string {
+  return item.repo.html_url;
+}
 
 export default function RepoList() {
   const { t } = useTranslation();
@@ -14,13 +28,26 @@ export default function RepoList() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
 
-  const filteredRepos = useMemo(() => {
-    const kw = filter.trim().toLowerCase();
-    if (!kw) return repos;
-    return repos.filter(
-      (r) => r.name.toLowerCase().includes(kw) || (r.description ?? "").toLowerCase().includes(kw),
-    );
+  // Same matcher as the file search: full name and description, both highlighted where they match
+  const filteredRepos = useMemo<FilteredRepo[]>(() => {
+    const kw = filter.trim();
+    if (!kw) return repos.map((repo) => ({ repo }));
+    const out: FilteredRepo[] = [];
+    for (const repo of repos) {
+      const titleRanges = matchRanges(repo.full_name, kw);
+      const description = repo.description ?? "";
+      const subtitleRanges = matchRanges(description, kw);
+      if (!titleRanges && !subtitleRanges) continue;
+      out.push({
+        repo,
+        titleHtml: titleRanges ? buildHighlighted(repo.full_name, titleRanges) : undefined,
+        subtitleHtml: subtitleRanges ? buildHighlighted(description, subtitleRanges) : undefined,
+      });
+    }
+    return out;
   }, [repos, filter]);
+
+  const [displayRepos, leavingKeys] = useListTransition(filteredRepos, repoKey);
 
   async function load() {
     setLoading(true);
@@ -76,20 +103,23 @@ export default function RepoList() {
         </div>
       )}
 
-      {!error && !loading && repos.length > 0 && filteredRepos.length === 0 && (
+      {!error && !loading && repos.length > 0 && displayRepos.length === 0 && (
         <div className="text-kumo-subtle mt-6 text-sm">{t("No matching repositories")}</div>
       )}
 
       <div className={`mt-6 ${RESULT_GRID}`}>
-        {filteredRepos.map((repo, i) => (
+        {displayRepos.map(({ repo, titleHtml, subtitleHtml }, i) => (
           <ResultCard
             key={repo.html_url}
             href={repo.html_url}
             title={repo.full_name}
+            titleHtml={titleHtml}
             subtitle={repo.description || ""}
+            subtitleHtml={subtitleHtml}
             meta={formatRepoSize(repo)}
             badge={riskBadge(repo.risk)}
             enterDelayMs={staggerDelayMs(i)}
+            leaving={leavingKeys.has(repo.html_url)}
           />
         ))}
       </div>
