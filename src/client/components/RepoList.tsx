@@ -17,8 +17,9 @@ interface FilteredRepo {
   subtitleHtml?: string;
 }
 
+// full_name is the unique identity in both production and demo data (demo repos share one html_url)
 function repoKey(item: FilteredRepo): string {
-  return item.repo.html_url;
+  return item.repo.full_name;
 }
 
 export default function RepoList() {
@@ -110,7 +111,7 @@ export default function RepoList() {
       <div className={`mt-6 ${RESULT_GRID}`}>
         {displayRepos.map(({ repo, titleHtml, subtitleHtml }, i) => (
           <ResultCard
-            key={repo.html_url}
+            key={repo.full_name}
             href={repo.html_url}
             title={repo.full_name}
             titleHtml={titleHtml}
@@ -119,7 +120,7 @@ export default function RepoList() {
             meta={formatRepoSize(repo)}
             badge={riskBadge(repo.risk)}
             enterDelayMs={staggerDelayMs(i)}
-            leaving={leavingKeys.has(repo.html_url)}
+            leaving={leavingKeys.has(repo.full_name)}
           />
         ))}
       </div>
