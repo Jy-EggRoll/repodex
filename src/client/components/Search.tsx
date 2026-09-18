@@ -29,8 +29,8 @@ function resultKey(item: SearchResult): string {
 }
 
 function titleHtml(item: SearchResult) {
-  if (item.highlightedPath && item.highlightedPath !== "undefined") return item.highlightedPath;
-  if (item.highlightedName && item.highlightedName !== "undefined") return item.highlightedName;
+  if (item.highlightedPath) return item.highlightedPath;
+  if (item.highlightedName) return item.highlightedName;
   // Plain fallback still goes through the shared builder so the name is escaped like everywhere else
   return buildHighlighted(item.name || "", []);
 }
@@ -379,6 +379,7 @@ export default function Search() {
               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
                   <Input
+                    aria-label={t("Filter indexes")}
                     placeholder={t("Filter indexes…")}
                     value={indexFilter}
                     onChange={(e) => setIndexFilter(e.target.value)}
@@ -432,6 +433,7 @@ export default function Search() {
             <Input
               ref={inputRef}
               className="w-full"
+              aria-label={t("Search files")}
               placeholder={t("Type keywords, press Enter or click Search (press / to focus)")}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !searching) searchFromInput();
