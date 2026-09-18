@@ -48,7 +48,6 @@
   "Search failed": "搜索失败",
   "Search failed ({0})": "搜索失败（{0}）",
   "Search files": "搜索文件",
-  "Searching": "搜索中",
   "Select all": "全选",
   "Select indexes": "选择索引",
   "Server {0}ms (fetch {1} / match {2})": "服务端 {0}ms（取数 {1} / 匹配 {2}）",

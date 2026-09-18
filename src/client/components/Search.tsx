@@ -476,9 +476,6 @@ export default function Search() {
           retryDisabled={searching}
         />
       </Fade>
-      <Fade show={searching}>
-        <LoadingRow>{t("Searching")}</LoadingRow>
-      </Fade>
 
       {/* Stacked grid: the three alternative states cross-fade in the same cell instead of shifting the page */}
       <div className="mt-6 grid">
