@@ -1,4 +1,4 @@
-import type { RepoInfo, SearchResult } from "./api";
+import type { RepoInfo, SearchResult } from "../types";
 
 /** Repository size (KB) as an MB string. */
 export function formatRepoSize(repo: RepoInfo): string {

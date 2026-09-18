@@ -19,7 +19,6 @@ export interface DemoBranch {
 
 export interface DemoRepo {
   repository: string;
-  repository_short_name: string;
   /** Repository size (KB), same unit as the GitHub API `size` used by the backend */
   sizeKb: number;
   branches: DemoBranch[];
@@ -120,7 +119,6 @@ export function buildDemoCorpus(seed: number = DEMO_SEED): DemoRepo[] {
 
   return REPOS.map((repo) => ({
     repository: repo.full,
-    repository_short_name: repo.short,
     sizeKb: repo.sizeKb,
     branches: repo.branches.map((branch_name) => {
       const files: DemoFile[] = [];

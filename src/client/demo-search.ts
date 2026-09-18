@@ -4,7 +4,8 @@ import { buildHighlighted } from "../highlight";
 import { matchRanges } from "../match";
 import { compareRank, rankKeyFromRanges, type RankKey } from "../rank";
 import { riskForSize } from "../risk";
-import type { RepoInfo, SearchResponse, SearchResult } from "./api";
+import type { RepoInfo, SearchResult } from "../types";
+import type { SearchResponse } from "./api";
 import { buildDemoCorpus } from "./demo-corpus";
 import { t } from "./i18n";
 
@@ -18,7 +19,6 @@ export function listRepos(): RepoInfo[] {
   return buildDemoCorpus().map((r) => {
     const size_mb = Math.round((r.sizeKb / 1024) * 100) / 100;
     return {
-      name: r.repository_short_name,
       full_name: r.repository,
       size: r.sizeKb,
       size_mb,
@@ -83,8 +83,6 @@ export async function searchIndexes(
             size_mb: Math.round((sizeBytes / 1024 / 1024) * 100) / 100,
             type: e.type,
             github_url: DEMO_GITHUB,
-            ranges: [],
-            score: tKey.matched,
           },
           key: tKey,
         });
@@ -98,10 +96,9 @@ export async function searchIndexes(
     const target = mode === "name" ? item.name : item.path;
     const ranges = matchRanges(target, query) ?? [];
     const highlighted = buildHighlighted(target, ranges);
-    const done: SearchResult = { ...item, ranges, score: item.score };
-    if (mode === "name") done.highlightedName = highlighted;
-    else done.highlightedPath = highlighted;
-    return done;
+    return mode === "name"
+      ? { ...item, highlightedName: highlighted }
+      : { ...item, highlightedPath: highlighted };
   });
 
   return {

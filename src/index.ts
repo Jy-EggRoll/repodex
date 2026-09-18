@@ -4,6 +4,7 @@ import { basicAuth } from "hono/basic-auth";
 import { prettyJSON } from "hono/pretty-json";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { SearchEngine } from "./search-do";
+import type { RepoInfo } from "./types";
 
 type Bindings = {
   public_assets: Fetcher;
@@ -12,15 +13,6 @@ type Bindings = {
   USER: string;
   PSWD: string;
 };
-
-interface RepoInfo {
-  name: string;
-  size: number;
-  size_mb: number;
-  risk: "safe" | "warn" | "danger";
-  description: string | null;
-  html_url: string;
-}
 
 interface RepoInfoCache {
   data: RepoInfo[];

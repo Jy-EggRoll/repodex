@@ -13,6 +13,7 @@ import i18n, {
   type Locale,
 } from "./i18n";
 import { CONTENT_MAX_W, SHELL_PADDING, PANEL, HEADER_SHADOW, CONTENT_SHADOW } from "./ui";
+import { DEMO } from "./api";
 
 const THEME_META: Record<ThemeSetting, { icon: typeof Sun; labelKey: string }> = {
   auto: { icon: Desktop, labelKey: "Follow system" },
@@ -97,11 +98,9 @@ export default function App() {
   const themeLabel = t(THEME_META[setting].labelKey);
   const langLabel = languageLabel(lang, t("Follow system"));
 
-  const isDemo = import.meta.env.VITE_DEMO === "1";
-
   return (
     <div className="bg-kumo-tint text-kumo-default min-h-screen antialiased">
-      {isDemo && (
+      {DEMO && (
         <div className="bg-kumo-info-tint text-kumo-strong px-4 py-2 text-center text-sm">
           {t("Demo mode: data is fictional, search logic matches the production version")}
         </div>

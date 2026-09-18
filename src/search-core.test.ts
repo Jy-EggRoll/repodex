@@ -369,8 +369,6 @@ describe("runSearch result shape", () => {
       "size_mb",
       "type",
       "github_url",
-      "ranges",
-      "score",
       "highlightedPath",
     ]);
     expect(file.github_url).toBe("https://github.com/owner/alpha/blob/main/src/deep/module.ts");

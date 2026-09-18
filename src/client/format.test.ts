@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildFileParam, type RepoInfo, type SearchResult } from "./api";
+import { buildFileParam } from "./api";
+import type { RepoInfo, SearchResult } from "../types";
 import { formatFileSize, formatRepoSize } from "./format";
 
 const repo = (size: number, size_mb: number): RepoInfo => ({
-  name: "r",
   full_name: "o/r",
   size,
   size_mb,
@@ -21,8 +21,6 @@ const item = (size?: number, size_mb?: number): SearchResult => ({
   size_mb: size_mb ?? NaN,
   type: "file",
   github_url: undefined,
-  ranges: [],
-  score: 0,
 });
 
 describe("formatRepoSize", () => {

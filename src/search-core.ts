@@ -2,6 +2,7 @@ import { chunk } from "./batch";
 import { buildHighlighted } from "./highlight";
 import { isPlainAscii, matchRanges } from "./match";
 import { compareRank, rankKeyFromRanges, recencyBoost, type RankKey } from "./rank";
+import type { SearchResult } from "./types";
 
 // Pure search pipeline, deliberately free of Cloudflare runtime imports (KV access is injected
 // through a get function) so the whole matching/selection logic can run under vitest unchanged.
@@ -62,21 +63,6 @@ export interface IndexEntry {
   path: string;
   size: number | undefined;
   type: "file" | "directory";
-}
-
-export interface SearchResult {
-  name: string;
-  repository: string;
-  branch: string;
-  path: string;
-  size: number | undefined;
-  size_mb: number;
-  type: "file" | "directory";
-  github_url: string | undefined;
-  ranges: Array<[number, number]>;
-  score: number;
-  highlightedPath?: string;
-  highlightedName?: string;
 }
 
 interface ScoredRef {
@@ -348,8 +334,6 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
         size_mb,
         type,
         github_url,
-        ranges,
-        score: s.key.matched,
       };
       if (mode === "name") result.highlightedName = highlighted;
       else result.highlightedPath = highlighted;

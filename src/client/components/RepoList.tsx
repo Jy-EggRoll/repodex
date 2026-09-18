@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge, Empty, Input } from "@cloudflare/kumo";
-import { fetchRepos, type RepoInfo } from "../api";
+import { fetchRepos } from "../api";
 import { formatRepoSize } from "../format";
 import { buildHighlighted } from "../../highlight";
 import { matchRanges } from "../../match";
+import type { RepoInfo } from "../../types";
 import { useListTransition } from "../hooks";
 import ResultCard, { CardSkeleton } from "./ResultCard";
 import ErrorNotice from "./ErrorNotice";

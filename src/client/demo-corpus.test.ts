@@ -9,12 +9,12 @@ describe("buildDemoCorpus", () => {
   it("five repos with branches, files, and directories", () => {
     const repos = buildDemoCorpus();
     expect(repos).toHaveLength(5);
-    expect(repos.map((r) => r.repository_short_name)).toEqual([
-      "demo-tiny",
-      "demo-code",
-      "demo-docs",
-      "demo-media",
-      "demo-large",
+    expect(repos.map((r) => r.repository)).toEqual([
+      "repodex-demo/demo-tiny",
+      "repodex-demo/demo-code",
+      "repodex-demo/demo-docs",
+      "repodex-demo/demo-media",
+      "repodex-demo/demo-large",
     ]);
     const files = repos.flatMap((r) => r.branches.flatMap((b) => b.files));
     const dirs = repos.flatMap((r) => r.branches.flatMap((b) => b.directories));

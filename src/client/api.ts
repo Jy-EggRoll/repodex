@@ -1,32 +1,8 @@
 import { t } from "./i18n";
-
-export interface RepoInfo {
-  name: string;
-  full_name: string;
-  size: number;
-  size_mb: number;
-  risk: "safe" | "warn" | "danger";
-  description: string | null;
-  html_url: string;
-}
-
-export interface SearchResult {
-  name: string;
-  repository: string;
-  branch: string;
-  path: string;
-  size: number | undefined;
-  size_mb: number;
-  type: "file" | "directory";
-  github_url: string | undefined;
-  ranges: [number, number][];
-  score: number;
-  highlightedPath?: string;
-  highlightedName?: string;
-}
+import type { RepoInfo, SearchResult } from "../types";
 
 // Demo build switch: VITE_DEMO=1 serves locally synthesized data (dynamically imported, zero residue in production bundles)
-const DEMO = import.meta.env.VITE_DEMO === "1";
+export const DEMO = import.meta.env.VITE_DEMO === "1";
 
 /** Read the server error code (if any) and translate it; falls back to a generic message. */
 async function errorMessage(res: Response): Promise<string> {

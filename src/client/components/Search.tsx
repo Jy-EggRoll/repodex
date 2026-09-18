@@ -12,17 +12,11 @@ import {
   DIALOG_MAX_H,
   staggerDelayMs,
 } from "../ui";
-import {
-  ApiError,
-  buildFileParam,
-  fetchIndexList,
-  searchFiles,
-  type SearchPerf,
-  type SearchResult,
-} from "../api";
+import { ApiError, buildFileParam, fetchIndexList, searchFiles, type SearchPerf } from "../api";
 import { formatFileSize } from "../format";
 import { buildHighlighted } from "../../highlight";
 import { matchRanges } from "../../match";
+import type { SearchResult } from "../../types";
 import { useEnterOnce, useListTransition } from "../hooks";
 import ResultCard from "./ResultCard";
 import ErrorNotice from "./ErrorNotice";
