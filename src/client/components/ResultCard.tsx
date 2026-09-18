@@ -1,19 +1,25 @@
 import type { ReactNode } from "react";
 import { CARD_SHELL, CARD_TRANSITION } from "../ui";
+import { useEnterOnce } from "../hooks";
 
 const TITLE_CLASS = "text-kumo-strong text-lg leading-tight font-semibold break-all";
+const SUBTITLE_CLASS = "text-kumo-subtle mt-1 text-xs break-words break-all whitespace-pre-wrap";
 
 interface ResultCardProps {
   href: string;
   /** Plain-text title (repo name, etc.); mutually exclusive with titleHtml */
   title?: string;
-  /** Highlight HTML returned by the backend; dangerouslySetInnerHTML is used nowhere else but here */
+  /** Highlight HTML from the shared builder (escaped apart from <mark>); dangerouslySetInnerHTML is used nowhere else but here */
   titleHtml?: string;
   subtitle: string;
+  /** Highlight HTML from the shared builder; falls back to the plain subtitle */
+  subtitleHtml?: string;
   meta: string;
   badge: ReactNode;
-  /** Entry animation delay (ms), staggered by list index; omitted means no delay */
+  /** Entry animation delay (ms), staggered by list index; applied only while the entry animation plays */
   enterDelayMs?: number;
+  /** Item is being filtered out: play the shared exit animation instead of the entry one */
+  leaving?: boolean;
 }
 
 export default function ResultCard({
@@ -21,17 +27,22 @@ export default function ResultCard({
   title,
   titleHtml,
   subtitle,
+  subtitleHtml,
   meta,
   badge,
   enterDelayMs,
+  leaving,
 }: ResultCardProps) {
+  const enter = useEnterOnce(enterDelayMs);
+  const animationClass = leaving ? "card-leave" : enter.entering ? "card-enter" : "";
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      style={enterDelayMs ? { animationDelay: `${enterDelayMs}ms` } : undefined}
-      className={`card-enter block h-full ${CARD_SHELL} ${CARD_TRANSITION} hover:shadow-sm active:scale-[0.99]`}
+      style={leaving ? undefined : enter.style}
+      onAnimationEnd={enter.onAnimationEnd}
+      className={`${animationClass} block h-full ${CARD_SHELL} ${CARD_TRANSITION} hover:shadow-sm active:scale-[0.99]`}
     >
       <div className="flex h-full w-full items-start justify-between gap-4">
         <div className="min-w-0 flex-1 text-left">
@@ -40,9 +51,11 @@ export default function ResultCard({
           ) : (
             <div className={TITLE_CLASS}>{title}</div>
           )}
-          <div className="text-kumo-subtle mt-1 text-xs break-words break-all whitespace-pre-wrap">
-            {subtitle}
-          </div>
+          {subtitleHtml !== undefined ? (
+            <div className={SUBTITLE_CLASS} dangerouslySetInnerHTML={{ __html: subtitleHtml }} />
+          ) : (
+            <div className={SUBTITLE_CLASS}>{subtitle}</div>
+          )}
         </div>
         <div className="flex shrink-0 flex-col items-end justify-start">
           <div className="text-kumo-subtle text-sm">{meta}</div>

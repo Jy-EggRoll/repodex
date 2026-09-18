@@ -81,10 +81,25 @@ mark {
   animation: card-in var(--motion-slow) var(--motion-ease) backwards;
 }
 
+/* Card exit for filtered-out items: fade out in place. Duration must match EXIT_MS in src/client/hooks.ts */
+@keyframes card-out {
+  to {
+    opacity: 0;
+    transform: translateY(var(--card-rise)) scale(0.98);
+  }
+}
+
+.card-leave {
+  animation: card-out var(--motion-fast) var(--motion-ease) forwards;
+  /* A fading item is on its way out: clicks (and a lingering transform) must not hit the header */
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .theme-icon-swap,
   .theme-menu-pop,
-  .card-enter {
+  .card-enter,
+  .card-leave {
     animation: none;
   }
 }
