@@ -26,6 +26,7 @@ import { matchRanges } from "../../match";
 import { useEnterOnce, useListTransition } from "../hooks";
 import ResultCard from "./ResultCard";
 import ErrorNotice from "./ErrorNotice";
+import Fade from "./Fade";
 
 const EMPTY_RESULTS: SearchResult[] = [];
 
@@ -403,7 +404,7 @@ export default function Search() {
               </div>
               <div className={`bg-kumo-base ${DIALOG_MAX_H} overflow-auto rounded-lg p-2`}>
                 {displayIndexes.length === 0 ? (
-                  <div className="text-kumo-subtle p-3 text-sm">{t("No matching indexes")}</div>
+                  <div className="text-kumo-subtle card-enter p-3 text-sm">{t("No matching indexes")}</div>
                 ) : (
                   <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
                     {displayIndexes.map(({ name, html }) => (
@@ -471,82 +472,86 @@ export default function Search() {
         </div>
       </div>
 
-      {error && (
+      <Fade show={!!error}>
         <ErrorNotice
           title={errorStatus ? t("Search failed ({0})", { 0: errorStatus }) : t("Search failed")}
           message={error}
           onRetry={() => searchFromInput()}
           retryDisabled={searching}
         />
-      )}
-      {searching && <LoadingRow>{t("Searching")}</LoadingRow>}
+      </Fade>
+      <Fade show={searching}>
+        <LoadingRow>{t("Searching")}</LoadingRow>
+      </Fade>
 
-      <div className="mt-6">
-        {results === null && !searching && !error && (
+      {/* Stacked grid: the three alternative states cross-fade in the same cell instead of shifting the page */}
+      <div className="mt-6 grid">
+        <Fade show={results === null && !searching && !error} className="[grid-area:1/1]">
           <Empty
             title={t("Type a keyword to start searching")}
             description={t("Press Enter or click the search button; match by name or path")}
           />
-        )}
-        {results !== null && displayResults.length === 0 && !searching && (
+        </Fade>
+        <Fade
+          show={results !== null && displayResults.length === 0 && !searching}
+          className="[grid-area:1/1]"
+        >
           <Empty
             title={t("No matches found")}
             description={t("Try another keyword or adjust the index selection")}
           />
-        )}
-        {displayResults.length > 0 && (
-          <div>
-            <h2 className="text-kumo-strong mb-2 text-lg font-semibold">
-              {t("Results ({0}{1} total · {2} files / {3} folders)", {
-                0: total,
-                1: perf?.truncated ? "+" : "",
-                2: fileCount,
-                3: dirCount,
-              })}
-            </h2>
-            {debug && perf && (
-              <div className="border-kumo-line bg-kumo-base mb-3 rounded-lg border p-3 font-mono text-xs">
-                <div className="text-kumo-subtle">
-                  {t("Server {0}ms (fetch {1} / match {2})", {
-                    0: perf.tookMs,
-                    1: perf.loadMs,
-                    2: perf.searchMs,
-                  })}
-                </div>
-                <div className="text-kumo-subtle mt-1">
-                  {t("Network round trip {0}ms · returned {1}/{2}", {
-                    0: perf.roundTripMs,
-                    1: results?.length ?? 0,
-                    2: total,
-                  })}
-                </div>
-                <div className="text-kumo-subtle mt-1">
-                  {t("Indexes {0} · items {1} · load failures {2}", {
-                    0: perf.indexCount,
-                    1: perf.itemsTotal,
-                    2: perf.loadFailCount,
-                  })}
-                </div>
+        </Fade>
+        <Fade show={displayResults.length > 0} className="[grid-area:1/1]">
+          <h2 className="text-kumo-strong mb-2 text-lg font-semibold">
+            {t("Results ({0}{1} total · {2} files / {3} folders)", {
+              0: total,
+              1: perf?.truncated ? "+" : "",
+              2: fileCount,
+              3: dirCount,
+            })}
+          </h2>
+          {debug && perf && (
+            <div className="border-kumo-line bg-kumo-base mb-3 rounded-lg border p-3 font-mono text-xs">
+              <div className="text-kumo-subtle">
+                {t("Server {0}ms (fetch {1} / match {2})", {
+                  0: perf.tookMs,
+                  1: perf.loadMs,
+                  2: perf.searchMs,
+                })}
               </div>
-            )}
-            <div className={RESULT_GRID}>
-              {displayResults.map((item, i) => (
-                <ResultRow
-                  key={resultKey(item)}
-                  item={item}
-                  index={i}
-                  leaving={leavingResultKeys.has(resultKey(item))}
-                />
-              ))}
+              <div className="text-kumo-subtle mt-1">
+                {t("Network round trip {0}ms · returned {1}/{2}", {
+                  0: perf.roundTripMs,
+                  1: results?.length ?? 0,
+                  2: total,
+                })}
+              </div>
+              <div className="text-kumo-subtle mt-1">
+                {t("Indexes {0} · items {1} · load failures {2}", {
+                  0: perf.indexCount,
+                  1: perf.itemsTotal,
+                  2: perf.loadFailCount,
+                })}
+              </div>
             </div>
-            <div ref={sentinelRef} />
-            {loadingMore && (
-              <LoadingRow center>
-                {t("Loading more (showing {0} / {1} total)", { 0: results?.length ?? 0, 1: total })}
-              </LoadingRow>
-            )}
+          )}
+          <div className={RESULT_GRID}>
+            {displayResults.map((item, i) => (
+              <ResultRow
+                key={resultKey(item)}
+                item={item}
+                index={i}
+                leaving={leavingResultKeys.has(resultKey(item))}
+              />
+            ))}
           </div>
-        )}
+          <div ref={sentinelRef} />
+          {loadingMore && (
+            <LoadingRow center>
+              {t("Loading more (showing {0} / {1} total)", { 0: results?.length ?? 0, 1: total })}
+            </LoadingRow>
+          )}
+        </Fade>
       </div>
     </section>
   );

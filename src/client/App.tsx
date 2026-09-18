@@ -187,7 +187,10 @@ export default function App() {
         </div>
 
         <div className={`${PANEL} ${SHELL_PADDING} ${CONTENT_SHADOW}`}>
-          {tab === "repos" ? <RepoList /> : <Search />}
+          {/* Keyed per tab: switching remounts the panel so it replays the shared enter animation */}
+          <div key={tab} className="card-enter">
+            {tab === "repos" ? <RepoList /> : <Search />}
+          </div>
         </div>
 
         <footer className="text-kumo-subtle mt-6 pb-2 text-center text-xs">

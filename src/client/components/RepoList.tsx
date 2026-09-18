@@ -8,6 +8,7 @@ import { matchRanges } from "../../match";
 import { useListTransition } from "../hooks";
 import ResultCard, { CardSkeleton } from "./ResultCard";
 import ErrorNotice from "./ErrorNotice";
+import Fade from "./Fade";
 import { PAGE_TITLE, RESULT_GRID, SKELETON_COUNT, staggerDelayMs } from "../ui";
 
 /** A repo plus the shared highlight HTML for each searched field (undefined = no filter query). */
@@ -90,12 +91,12 @@ export default function RepoList() {
         />
       </div>
 
-      {error && <ErrorNotice title={t("Load failed")} message={error} />}
-      {!error && !loading && repos.length === 0 && (
-        <div className="mt-6">
-          <Empty title={t("No repository data")} description={t("Fetching data")} />
-        </div>
-      )}
+      <Fade show={!!error}>
+        <ErrorNotice title={t("Load failed")} message={error} />
+      </Fade>
+      <Fade show={!error && !loading && repos.length === 0} className="mt-6">
+        <Empty title={t("No repository data")} description={t("Fetching data")} />
+      </Fade>
       {loading && repos.length === 0 && (
         <div className={`mt-6 ${RESULT_GRID}`}>
           {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
@@ -104,9 +105,12 @@ export default function RepoList() {
         </div>
       )}
 
-      {!error && !loading && repos.length > 0 && displayRepos.length === 0 && (
-        <div className="text-kumo-subtle mt-6 text-sm">{t("No matching repositories")}</div>
-      )}
+      <Fade
+        show={!error && !loading && repos.length > 0 && displayRepos.length === 0}
+        className="text-kumo-subtle mt-6 text-sm"
+      >
+        {t("No matching repositories")}
+      </Fade>
 
       <div className={`mt-6 ${RESULT_GRID}`}>
         {displayRepos.map(({ repo, titleHtml, subtitleHtml }, i) => (

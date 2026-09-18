@@ -20,11 +20,9 @@ mark {
   display: none;
 }
 
-/* Animation duration and easing tokens */
+/* Motion tokens: every enter/exit fade shares one 200ms duration (keep in sync with EXIT_MS in src/client/hooks.ts) */
 :root {
-  --motion-fast: 0.18s;
-  --motion-base: 0.25s;
-  --motion-slow: 0.3s;
+  --motion-fade: 0.2s;
   --motion-ease: ease-out;
   --menu-rise: -4px;
   --card-rise: 8px;
@@ -43,7 +41,7 @@ mark {
 }
 
 .theme-icon-swap {
-  animation: theme-icon-in var(--motion-base) var(--motion-ease);
+  animation: theme-icon-in var(--motion-fade) var(--motion-ease);
 }
 
 /* Theme dropdown panel: plays on mount (remounted on every open), fade in + scale + rise */
@@ -60,7 +58,7 @@ mark {
 
 .theme-menu-pop {
   transform-origin: top right;
-  animation: theme-menu-in var(--motion-fast) var(--motion-ease);
+  animation: theme-menu-in var(--motion-fade) var(--motion-ease);
 }
 
 /* Card entry: fade in + rise + slight scale; inline animation-delay staggers the list */
@@ -78,7 +76,7 @@ mark {
 /* fill-mode is backwards, not both: both would permanently keep the final transform,
    turning cards into a persistent stacking context that covers the sticky header and swallows clicks */
 .card-enter {
-  animation: card-in var(--motion-slow) var(--motion-ease) backwards;
+  animation: card-in var(--motion-fade) var(--motion-ease) backwards;
 }
 
 /* Card exit for filtered-out items: fade out in place. Duration must match EXIT_MS in src/client/hooks.ts */
@@ -90,7 +88,7 @@ mark {
 }
 
 .card-leave {
-  animation: card-out var(--motion-fast) var(--motion-ease) forwards;
+  animation: card-out var(--motion-fade) var(--motion-ease) forwards;
   /* A fading item is on its way out: clicks (and a lingering transform) must not hit the header */
   pointer-events: none;
 }

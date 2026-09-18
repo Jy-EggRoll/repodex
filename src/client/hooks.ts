@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type AnimationEvent, type CSSProperties } from "react";
 
-/** Exit animation duration; keep in sync with --motion-fast in main.css. */
-const EXIT_MS = 180;
+/** Enter/exit animation duration; keep in sync with --motion-fade in main.css. */
+const EXIT_MS = 200;
 
 /** Keys present in `previous` but missing from `next`, in previous order. */
 export function leavingKeys(previous: string[], next: Iterable<string>): string[] {
@@ -53,4 +53,26 @@ export function useEnterOnce(delayMs?: number) {
     if (event.target === event.currentTarget) setEntering(false);
   }
   return { entering, style, onAnimationEnd };
+}
+
+/**
+ * Delayed unmount for one conditional element (notices, empty states, panels): when `show` turns
+ * false it stays mounted for one exit animation while reporting `leaving`; turning it back on
+ * cancels the exit.
+ */
+export function useDelayedPresence(show: boolean, exitMs = EXIT_MS): [present: boolean, leaving: boolean] {
+  const [mounted, setMounted] = useState(show);
+  const leaving = mounted && !show;
+
+  useEffect(() => {
+    if (show) {
+      setMounted(true);
+      return;
+    }
+    if (!mounted) return;
+    const timer = setTimeout(() => setMounted(false), exitMs);
+    return () => clearTimeout(timer);
+  }, [show, mounted, exitMs]);
+
+  return [mounted || show, leaving];
 }
