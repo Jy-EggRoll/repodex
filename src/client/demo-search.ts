@@ -1,7 +1,7 @@
-/** Demo data source: same matching library, same rank function, and same highlight builder as production — only the data source becomes a locally synthesized corpus. */
+/** Demo data source: same matching entry point, same rank function, and same highlight builder as production — only the data source becomes a locally synthesized corpus. */
 
-import { search as tseSearch } from "text-search-engine";
 import { buildHighlighted } from "../highlight";
+import { matchRanges } from "../match";
 import { compareRank, rankKeyFromRanges, type RankKey } from "../rank";
 import { riskForSize } from "../risk";
 import type { RepoInfo, SearchResponse, SearchResult } from "./api";
@@ -66,7 +66,7 @@ export async function searchIndexes(
       for (const e of entries) {
         itemsTotal += 1;
         const target = mode === "name" ? e.name : e.path.replace(/^\.\//, "");
-        const ranges = tseSearch(target, query);
+        const ranges = matchRanges(target, query);
         if (!ranges) continue;
         const tKey = rankKeyFromRanges(ranges, Array.from(target).length);
         if (!tKey) continue;
@@ -96,7 +96,7 @@ export async function searchIndexes(
   scored.sort((a, b) => compareRank(a.key, b.key));
   const results = scored.slice(offset, offset + limit).map(({ item }) => {
     const target = mode === "name" ? item.name : item.path;
-    const ranges = tseSearch(target, query) ?? [];
+    const ranges = matchRanges(target, query) ?? [];
     const highlighted = buildHighlighted(target, ranges);
     const done: SearchResult = { ...item, ranges, score: item.score };
     if (mode === "name") done.highlightedName = highlighted;

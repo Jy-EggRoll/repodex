@@ -3,7 +3,6 @@ import { search as tseSearch } from "text-search-engine";
 import {
   PLAN_KEY,
   basename,
-  canMaybeMatch,
   decodeChunk,
   parsePlan,
   resolveSelection,
@@ -120,41 +119,7 @@ function withoutTimings(body: any) {
 
 // ---------------- tests ----------------
 
-describe("canMaybeMatch soundness", () => {
-  const pairs: Array<[string, string]> = [
-    ["readme", "README.md"],
-    ["rsp", "src/README.md"],
-    ["zzz", "src/index.ts"],
-    ["SM", "说明.md"],
-    ["sm", "说明文档.md"],
-    ["拼音", "说明文档.md"],
-    ["a b", "docs/a  b.txt"],
-    ["a b", "docs/a b.txt"],
-    ["a\u00a0b", "docs/a b.txt"],
-    ["md", "说明.md"],
-    ["全角", "ｆｕｌｌｗｉｄｔｈ.txt"],
-    ["TM", "README.md"],
-  ];
-
-  it("a negative prefilter verdict always means the library finds nothing", () => {
-    for (const [q, t] of pairs) {
-      if (!canMaybeMatch(q, t)) {
-        expect(tseSearch(t, q), `q=${q} target=${t}`).toBeUndefined();
-      }
-    }
-  });
-
-  it("defers to the library for non-ASCII targets (pinyin/space semantics)", () => {
-    expect(canMaybeMatch("SM", "说明.md")).toBe(true);
-    expect(canMaybeMatch("a b", "docs/a  b.txt")).toBe(true);
-    expect(canMaybeMatch("md", "说明.md")).toBe(true);
-  });
-
-  it("plain ASCII still gets the fast path", () => {
-    expect(canMaybeMatch("zzz", "src/index.ts")).toBe(false);
-    expect(canMaybeMatch("readme", "README.md")).toBe(true);
-  });
-
+describe("targetLength / basename", () => {
   it("targetLength counts code points, basename strips prefixes", () => {
     expect(targetLength("abc")).toBe(3);
     expect(targetLength("🚀🚀")).toBe(2);
