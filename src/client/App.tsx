@@ -186,8 +186,9 @@ export default function App() {
         </div>
 
         <div className={`${PANEL} ${SHELL_PADDING} ${CONTENT_SHADOW}`}>
-          {/* Keyed per tab: switching remounts the panel so it replays the shared enter animation */}
-          <div key={tab} className="card-enter">
+          {/* Keyed per tab: switching remounts the panel so it replays the enter animation.
+              Opacity only — card-enter's scale would slide this page-sized box's title on every switch */}
+          <div key={tab} className="panel-enter">
             {tab === "repos" ? <RepoList /> : <Search />}
           </div>
         </div>
