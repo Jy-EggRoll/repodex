@@ -20,6 +20,8 @@
 //   REPOS_ONLY       Optional, comma-separated owner/repo; process only these repos (manual re-runs)
 //   DRY_RUN          Optional, set to 1 to report only without writing KV
 
+import { pathToFileURL } from "node:url";
+
 const GH_API = "https://api.github.com";
 const CF_API = "https://api.cloudflare.com/client/v4";
 const SHA_TABLE_KEY = "__meta-sha-table";
@@ -458,7 +460,8 @@ async function main() {
   console.log(`${counts.total} repos: ${tally}\n`);
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+// pathToFileURL matches the raw argv path even when it contains spaces or non-ASCII characters
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((e) => {
     console.error(e);
     process.exit(1);
