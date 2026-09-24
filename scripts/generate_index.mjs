@@ -293,6 +293,42 @@ export function buildRepoInfo(repos) {
   return infos;
 }
 
+function isTreeData(data) {
+  return typeof data === "object" && data !== null && !Array.isArray(data) && Array.isArray(data.tree);
+}
+
+/**
+ * One branch's tree entries, complete even for repositories whose recursive tree GitHub truncates.
+ * The recursive endpoint returns `truncated: true` (or omits entries) past its size limit; in that
+ * case walk the tree directory by directory and reassemble full paths.
+ */
+async function fetchTree(fullName, sha, token) {
+  const data = await ghRequest(`/repos/${fullName}/git/trees/${sha}?recursive=1`, token, "git tree");
+  if (!isTreeData(data)) throw new Error("git tree response is not a tree");
+  if (!data.truncated) return data.tree;
+  return walkTree(fullName, sha, token);
+}
+
+/** Non-recursive walk used as the truncated-tree fallback: more API calls, but never partial. */
+async function walkTree(fullName, rootSha, token) {
+  const entries = [];
+  const stack = [{ sha: rootSha, prefix: "" }];
+  while (stack.length) {
+    const { sha, prefix } = stack.pop();
+    const data = await ghRequest(`/repos/${fullName}/git/trees/${sha}`, token, "git tree");
+    if (!isTreeData(data)) throw new Error("git tree node is not a tree");
+    for (const entry of data.tree) {
+      const path = prefix ? `${prefix}/${entry.path}` : entry.path;
+      if (entry.type === "blob") entries.push({ path, type: "blob", size: entry.size ?? 0 });
+      else if (entry.type === "tree") {
+        entries.push({ path, type: "tree" });
+        stack.push({ sha: entry.sha, prefix: path });
+      }
+    }
+  }
+  return entries;
+}
+
 async function main() {
   const { readFile } = await import("node:fs/promises");
   const { fileURLToPath } = await import("node:url");
@@ -399,16 +435,15 @@ async function main() {
     const branches = [];
     let treeFailed = false;
     for (const [branchName, headSha] of Object.entries(current).sort()) {
-      const tree = await ghRequest(
-        `/repos/${fullName}/git/trees/${headSha}?recursive=1`,
-        ghToken,
-        "git tree",
-      );
-      if (typeof tree !== "object" || tree === null || Array.isArray(tree) || tree.truncated) {
+      try {
+        // fetchTree falls back to a full directory walk when GitHub truncates the recursive tree
+        const entries = await fetchTree(fullName, headSha, ghToken);
+        branches.push(buildBranchItems(branchName, entries));
+      } catch (e) {
         treeFailed = true;
+        say(yellow(`! repo skipped (git tree): ${e.message}`));
         break;
       }
-      branches.push(buildBranchItems(branchName, tree.tree ?? []));
     }
     if (treeFailed) {
       counts.warned += 1;
