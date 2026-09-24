@@ -201,6 +201,8 @@ export default function Search() {
     setError("");
     setErrorStatus(null);
     setSearching(true);
+    // A new search supersedes any in-flight load-more; clear its state so the spinner cannot stick
+    setLoadingMore(false);
     try {
       const tStart = performance.now();
       const data = await searchFiles(
