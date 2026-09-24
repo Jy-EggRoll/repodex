@@ -1,14 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   attachPushedAt,
   buildBranchItems,
   buildChunkWrites,
+  cfKvList,
   computePruneList,
   encodeChunk,
   needsUpdate,
   parseBlocklist,
   shouldSkip,
   buildRepoInfo,
+  withRetry,
 } from "./generate_index.mjs";
 
 describe("parseBlocklist", () => {
@@ -177,6 +179,95 @@ describe("computePruneList", () => {
   it("REPOS_ONLY-style calls with nothing planned prune everything else, so main() must guard the call", () => {
     // Documents the blast radius: this is exactly why single-repo runs never call computePruneList
     expect(computePruneList(["o/a@0", "o/b@0"], [])).toEqual(["o/a@0", "o/b@0"]);
+  });
+});
+
+describe("withRetry", () => {
+  it("retries retryable failures until success", async () => {
+    let calls = 0;
+    const result = await withRetry(
+      async () => {
+        calls += 1;
+        if (calls < 3) throw new Error("transient");
+        return "ok";
+      },
+      { tries: 5, baseMs: 1 },
+    );
+    expect(result).toBe("ok");
+    expect(calls).toBe(3);
+  });
+
+  it("fails fast on a non-retryable error", async () => {
+    let calls = 0;
+    const fatal = new Error("fatal");
+    fatal.retryable = false;
+    await expect(
+      withRetry(
+        async () => {
+          calls += 1;
+          throw fatal;
+        },
+        { tries: 5, baseMs: 1 },
+      ),
+    ).rejects.toThrow("fatal");
+    expect(calls).toBe(1);
+  });
+
+  it("throws the last error after exhausting every try", async () => {
+    let calls = 0;
+    await expect(
+      withRetry(
+        async () => {
+          calls += 1;
+          throw new Error("always");
+        },
+        { tries: 2, baseMs: 1 },
+      ),
+    ).rejects.toThrow("always");
+    expect(calls).toBe(2);
+  });
+});
+
+describe("cfKvList", () => {
+  it("follows the cursor until the list is complete", async () => {
+    const pages = [
+      { success: true, result: [{ name: "a" }], result_info: { cursor: "cursor-1" } },
+      { success: true, result: [{ name: "b" }], result_info: { list_complete: true } },
+    ];
+    const calls = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url) => {
+        calls.push(String(url));
+        return { ok: true, status: 200, json: async () => pages[calls.length - 1] };
+      }),
+    );
+    try {
+      expect(await cfKvList("acct", "ns", "token")).toEqual(["a", "b"]);
+      expect(calls).toHaveLength(2);
+      expect(calls[0]).toContain("limit=1000");
+      expect(calls[0]).not.toContain("cursor=");
+      expect(calls[1]).toContain("cursor=cursor-1");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("also pages when only a cursor is returned, stopping on an absent one", async () => {
+    const pages = [
+      { success: true, result: [{ name: "a" }], result_info: { cursor: "c1" } },
+      { success: true, result: [{ name: "b" }], result_info: {} },
+    ];
+    let i = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => pages[i++] })),
+    );
+    try {
+      expect(await cfKvList("acct", "ns", "token")).toEqual(["a", "b"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
