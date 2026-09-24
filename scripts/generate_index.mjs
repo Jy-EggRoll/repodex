@@ -52,24 +52,51 @@ function required(name) {
   return value;
 }
 
+/** HTTP failure with a retryable flag: 429/5xx and network errors are transient, other 4xx are not. */
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+    this.retryable = status === 429 || status >= 500;
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Retry a transient failure with exponential backoff; `retryable === false` errors fail fast. */
+export async function withRetry(fn, { tries = 3, baseMs = 500 } = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= tries; attempt++) {
+    try {
+      return await fn(attempt);
+    } catch (e) {
+      lastError = e;
+      if (e?.retryable === false || attempt === tries) break;
+      await sleep(baseMs * 2 ** (attempt - 1));
+    }
+  }
+  throw lastError;
+}
+
 async function ghRequest(path, token, what = path) {
   // GitHub API calls with automatic pagination: concatenate arrays, return objects as-is.
   let result = null;
   let page = 1;
   for (;;) {
     const sep = path.includes("?") ? "&" : "?";
-    const res = await fetch(`${GH_API}${path}${sep}per_page=100&page=${page}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
+    const data = await withRetry(async () => {
+      const res = await fetch(`${GH_API}${path}${sep}per_page=100&page=${page}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      });
+      if (!res.ok) throw new HttpError(res.status, `GitHub API failed: ${what} -> HTTP ${res.status}`);
+      return res.json();
     });
-    if (!res.ok) {
-      console.error(`GitHub API failed: ${what} -> HTTP ${res.status}`);
-      process.exit(1);
-    }
-    const data = await res.json();
     if (!Array.isArray(data)) return data;
     result = (result ?? []).concat(data);
     if (data.length < 100) return result;
@@ -78,62 +105,74 @@ async function ghRequest(path, token, what = path) {
 }
 
 async function cfKvGet(account, namespace, token, key) {
-  const res = await fetch(`${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/values/${key}`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const res = await withRetry(async () => {
+    const r = await fetch(`${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/values/${key}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (r.status === 404) return r;
+    if (!r.ok) throw new HttpError(r.status, `KV GET failed -> HTTP ${r.status}`);
+    return r;
   });
   if (res.status === 404) return null;
-  if (!res.ok) {
-    console.error(`KV GET failed -> HTTP ${res.status}`);
-    process.exit(1);
-  }
   return res.json();
 }
 
 async function cfKvPut(account, namespace, token, key, value, dryRun) {
   if (dryRun) return;
-  const res = await fetch(`${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/values/${key}`, {
-    method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify(value),
+  await withRetry(async () => {
+    const res = await fetch(
+      `${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/values/${key}`,
+      {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify(value),
+      },
+    );
+    if (!res.ok) throw new HttpError(res.status, `KV PUT failed -> HTTP ${res.status}`);
+    const result = await res.json();
+    if (result.success === false) throw new Error("KV PUT returned success=false");
   });
-  if (!res.ok) {
-    console.error(`KV PUT failed -> HTTP ${res.status}`);
-    process.exit(1);
-  }
-  const result = await res.json();
-  if (result.success === false) {
-    console.error("KV PUT returned success=false");
-    process.exit(1);
-  }
 }
 
 async function cfKvDelete(account, namespace, token, key, dryRun) {
   if (dryRun) return;
-  const res = await fetch(`${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/values/${key}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
+  await withRetry(async () => {
+    const res = await fetch(
+      `${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/values/${key}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    if (!res.ok) throw new HttpError(res.status, `KV DELETE failed -> HTTP ${res.status}`);
   });
-  if (!res.ok) {
-    console.error(`KV DELETE failed -> HTTP ${res.status}`);
-    process.exit(1);
-  }
 }
 
-async function cfKvList(account, namespace, token) {
-  const res = await fetch(
-    `${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/keys?limit=1000`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  if (!res.ok) {
-    console.error(`KV LIST failed -> HTTP ${res.status}`);
-    process.exit(1);
+/** All keys in the namespace; follows the cursor until the API reports the list complete. */
+export async function cfKvList(account, namespace, token) {
+  const keys = [];
+  let cursor = "";
+  for (;;) {
+    const requestCursor = cursor;
+    const url = new URL(`${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/keys`);
+    url.searchParams.set("limit", "1000");
+    if (requestCursor) url.searchParams.set("cursor", requestCursor);
+    const result = await withRetry(async () => {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new HttpError(res.status, `KV LIST failed -> HTTP ${res.status}`);
+      const body = await res.json();
+      if (body.success === false) throw new Error("KV LIST returned success=false");
+      return body;
+    });
+    for (const k of result.result ?? []) keys.push(k.name);
+    const info = result.result_info ?? {};
+    if (info.list_complete === true) break;
+    const next = info.cursor ?? "";
+    // An empty or repeated cursor means there is nothing more to page through
+    if (!next || next === requestCursor) break;
+    cursor = next;
   }
-  const result = await res.json();
-  if (result.success === false) {
-    console.error("KV LIST returned success=false");
-    process.exit(1);
-  }
-  return (result.result ?? []).map((k) => k.name);
+  return keys;
 }
 
 /** repos-blocklist.txt: one owner/repo per line; lines starting with # and blank lines are ignored. */
@@ -307,10 +346,16 @@ async function main() {
   const rebuilt = new Set();
 
   // All three affiliations: personal repos, organization repos, and repos where you are a collaborator
-  const repos = await ghRequest(
-    "/user/repos?affiliation=owner,collaborator,organization_member&sort=full_name",
-    ghToken,
-  );
+  let repos;
+  try {
+    repos = await ghRequest(
+      "/user/repos?affiliation=owner,collaborator,organization_member&sort=full_name",
+      ghToken,
+    );
+  } catch (e) {
+    console.error(red(`Failed to list repositories: ${e.message}`));
+    process.exit(1);
+  }
   // Last-push table for the plan (free: already in the repo list response); missing repos keep their previous value
   const pushedAt = new Map();
   for (const repo of repos) {
@@ -328,7 +373,15 @@ async function main() {
     }
     discoveredKeys.add(fullName);
 
-    const branchList = await ghRequest(`/repos/${fullName}/branches`, ghToken, "branches");
+    let branchList;
+    try {
+      branchList = await ghRequest(`/repos/${fullName}/branches`, ghToken, "branches");
+    } catch (e) {
+      // A single unreachable repo must not abort the whole run; it is retried on the next sync
+      counts.warned += 1;
+      say(yellow(`! repo skipped (branches): ${e.message}`));
+      continue;
+    }
     const current = Object.fromEntries(
       branchList.filter((b) => b.name && b.commit).map((b) => [b.name, b.commit.sha]),
     );
