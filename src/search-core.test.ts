@@ -7,7 +7,6 @@ import {
   parsePlan,
   resolveSelection,
   runSearch,
-  targetLength,
   type KvGet,
   type SearchPlan,
   type SearchSpec,
@@ -119,10 +118,8 @@ function withoutTimings(body: any) {
 
 // ---------------- tests ----------------
 
-describe("targetLength / basename", () => {
-  it("targetLength counts code points, basename strips prefixes", () => {
-    expect(targetLength("abc")).toBe(3);
-    expect(targetLength("🚀🚀")).toBe(2);
+describe("basename", () => {
+  it("strips path prefixes and keeps the file name", () => {
     expect(basename("./src/a.ts")).toBe("a.ts");
     expect(basename("说明.md")).toBe("说明.md");
     expect(basename("")).toBe("");

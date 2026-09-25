@@ -1,6 +1,6 @@
 import { chunk } from "./batch";
 import { buildHighlighted } from "./highlight";
-import { isPlainAscii, matchRanges } from "./match";
+import { matchRanges } from "./match";
 import { compareRank, rankKeyFromRanges, recencyBoost, type RankKey } from "./rank";
 import type { SearchResult } from "./types";
 
@@ -142,11 +142,6 @@ export function decodeChunk(text: string, repository: string, branch: string): I
   return out;
 }
 
-/** Code-point length (Array.from) matches the old rank denominator; plain ASCII can skip the allocation. */
-export function targetLength(target: string): number {
-  return isPlainAscii(target) ? target.length : Array.from(target).length;
-}
-
 export function findPlanRepo(plan: SearchPlan, name: string): PlanRepo | null {
   for (const rp of plan.repos) {
     if (rp.r === name) return rp;
@@ -223,7 +218,9 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
       if (!target) continue;
       const ranges = matchRanges(target, q);
       if (!ranges) continue;
-      const key = rankKeyFromRanges(ranges, targetLength(target), boost);
+      // Rank denominator in the same unit as the ranges (UTF-16 code units), so non-ASCII targets
+      // cannot score above 1 coverage and the ratio stays exact
+      const key = rankKeyFromRanges(ranges, target.length, boost);
       if (!key) continue;
       if (e.type === "directory") dirCount += 1;
       else fileCount += 1;

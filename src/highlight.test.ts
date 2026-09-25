@@ -6,6 +6,11 @@ describe("buildHighlighted", () => {
     expect(buildHighlighted("README.md", [[0, 5]])).toBe("<mark>README</mark>.md");
   });
 
+  it("keeps ranges aligned when astral characters precede the match", () => {
+    // The matching library reports UTF-16 offsets; counting code points would highlight "EADME."
+    expect(buildHighlighted("🚀README.md", [[2, 7]])).toBe("🚀<mark>README</mark>.md");
+  });
+
   it("returns the target unchanged when there are no ranges", () => {
     expect(buildHighlighted("abc", [])).toBe("abc");
   });

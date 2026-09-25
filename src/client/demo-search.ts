@@ -68,7 +68,8 @@ export async function searchIndexes(
         const target = mode === "name" ? e.name : e.path.replace(/^\.\//, "");
         const ranges = matchRanges(target, query);
         if (!ranges) continue;
-        const tKey = rankKeyFromRanges(ranges, Array.from(target).length);
+        // Same length unit as the ranges (UTF-16 code units), matching the production pipeline
+        const tKey = rankKeyFromRanges(ranges, target.length);
         if (!tKey) continue;
         if (e.type === "directory") dirCount += 1;
         else fileCount += 1;
