@@ -6,6 +6,7 @@
     "dev": "wrangler dev",
     "dev:client": "vite",
     "build": "vite build",
+    "build:demo": "VITE_DEMO=1 vite build --base=/repodex/ --outDir dist-demo",
     "preview": "vite preview",
     "deploy": "pnpm build && wrangler deploy --minify",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
@@ -14,7 +15,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm cf-typegen && pnpm format:check && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
     "@cloudflare/kumo": "^2.13.2",

@@ -33,9 +33,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # No .env.demo file: the global gitignore would swallow it. Pass env vars directly instead.
+      # No .env.demo file: the global gitignore would swallow it. The VITE_DEMO switch lives in the script.
       - name: Build demo
-        run: VITE_DEMO=1 pnpm exec vite build --base=/repodex/ --outDir dist-demo
+        run: pnpm build:demo
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
