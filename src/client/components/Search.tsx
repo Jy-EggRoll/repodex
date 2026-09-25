@@ -1,7 +1,7 @@
 import { memo, startTransition, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Input, Switch, Checkbox, Badge, Dialog, Loader, Empty } from "@cloudflare/kumo";
-import { Bug, X } from "@phosphor-icons/react";
+import { BugIcon, XIcon } from "@phosphor-icons/react";
 import {
   PAGE_SIZE,
   PAGE_TITLE,
@@ -12,18 +12,26 @@ import {
   DIALOG_MAX_H,
   staggerDelayMs,
 } from "../ui";
-import { ApiError, buildFileParam, fetchIndexList, searchFiles, type SearchPerf } from "../api";
+import { buildFileParam, fetchIndexList, searchFiles, type SearchPerf } from "../api";
 import { formatFileSize } from "../format";
 import { buildHighlighted } from "../../highlight";
 import { matchRanges } from "../../match";
 import type { SearchResult } from "../../types";
 import { useEnterOnce, useListTransition } from "../hooks";
 import { pagingSource, type SearchRequest, type SubmittedSearch } from "../paging";
+import { createRequestGate, requestFailure, runLatest } from "../request";
 import ResultCard from "./ResultCard";
 import ErrorNotice from "./ErrorNotice";
 import Fade from "./Fade";
 
 const EMPTY_RESULTS: SearchResult[] = [];
+
+/** A standing failure plus what Retry must re-run: the exact request that failed, or the index load. */
+interface Failure {
+  message: string;
+  status: number | null;
+  retry: SearchRequest | "indexes";
+}
 
 function resultKey(item: SearchResult): string {
   return `${item.repository}\u0000${item.branch}\u0000${item.path}\u0000${item.type}`;
@@ -124,8 +132,8 @@ export default function Search() {
   const [checked, setChecked] = useState<string[]>([]);
   const [loadingIndexes, setLoadingIndexes] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [error, setError] = useState("");
-  const [errorStatus, setErrorStatus] = useState<number | null>(null);
+  // One failure at a time, carrying the retry target: the UI never has to guess what to re-run
+  const [failure, setFailure] = useState<Failure | null>(null);
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [total, setTotal] = useState(0);
   const [fileCount, setFileCount] = useState(0);
@@ -156,25 +164,28 @@ export default function Search() {
 
   // Uncontrolled input: typing only touches the DOM and never triggers a React render; searches fire only on Enter/button/selection change
   const inputRef = useRef<HTMLInputElement>(null);
-  // Monotonic request id: stale responses are dropped so results converge on the last submission
-  const requestIdRef = useRef(0);
+  // One gate for the whole screen: the last request to start is the only one allowed to land
+  const [gate] = useState(createRequestGate);
   // The search that produced the list on screen: paging follows this, never the live input value
   const submittedRef = useRef<SubmittedSearch | null>(null);
 
-  useEffect(() => {
-    async function loadIndexes() {
-      setLoadingIndexes(true);
-      try {
-        const arr = await fetchIndexList();
-        setIndexes(arr);
-        setChecked((prev) => (prev.length === 0 ? arr : prev));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setLoadingIndexes(false);
-      }
+  /** Load the index list; also the retry target for a failed load. */
+  async function loadIndexes() {
+    setLoadingIndexes(true);
+    try {
+      const arr = await fetchIndexList();
+      setIndexes(arr);
+      setChecked((prev) => (prev.length === 0 ? arr : prev));
+      setFailure((prev) => (prev?.retry === "indexes" ? null : prev));
+    } catch (e) {
+      setFailure({ ...requestFailure(e), retry: "indexes" });
+    } finally {
+      setLoadingIndexes(false);
     }
-    loadIndexes();
+  }
+
+  useEffect(() => {
+    void loadIndexes();
   }, []);
 
   // "/" shortcut focuses the search box (not hijacked while already inside an input)
@@ -197,54 +208,62 @@ export default function Search() {
     }
   }
 
-  async function doSearch(q: string, list: string[], nameMode: boolean) {
-    const v = q.trim();
-    if (!v) return;
-    const id = ++requestIdRef.current;
-    setError("");
-    setErrorStatus(null);
+  /**
+   * Run one submitted search. It reads nothing from the live UI, so Retry can re-run exactly this
+   * request even after the input box or the selection changed.
+   */
+  async function doSearch(request: SearchRequest) {
+    setFailure(null);
     setSearching(true);
     // A new search supersedes any in-flight load-more; clear its state so the spinner cannot stick
     setLoadingMore(false);
+    const tStart = performance.now();
+    await runLatest(
+      gate,
+      () => searchFiles(request.q, request.file, request.mode, PAGE_SIZE, 0),
+      (data) => {
+        // Paging follows this response: the list it produced is what proves it owns the screen
+        submittedRef.current = { ...request, results: data.results };
+        setTotal(data.total);
+        setFileCount(data.fileCount);
+        setDirCount(data.dirCount);
+        setPerf({ ...data, roundTripMs: Math.round(performance.now() - tStart) });
+        startTransition(() => {
+          setResults(data.results);
+        });
+      },
+      (f) => setFailure({ ...f, retry: request }),
+      () => setSearching(false),
+    );
+  }
+
+  /** Read the live UI and submit it: the only place the input box and the selection are read. */
+  function searchFromInput(list = checked, nameMode = byName) {
+    const q = (inputRef.current?.value ?? "").trim();
+    if (!q) return;
     const request: SearchRequest = {
-      q: v,
+      q,
       file: buildFileParam(list, indexes.length),
       mode: nameMode ? "name" : "path",
     };
-    try {
-      const tStart = performance.now();
-      const data = await searchFiles(request.q, request.file, request.mode, PAGE_SIZE, 0);
-      if (id !== requestIdRef.current) return;
-      // Paging follows this response: editing the input box later cannot change what "next page" means
-      submittedRef.current = { ...request, count: data.results.length };
-      setTotal(data.total);
-      setFileCount(data.fileCount);
-      setDirCount(data.dirCount);
-      setPerf({ ...data, roundTripMs: Math.round(performance.now() - tStart) });
-      startTransition(() => {
-        setResults(data.results);
-      });
-    } catch (e) {
-      if (id !== requestIdRef.current) return;
-      setErrorStatus(e instanceof ApiError ? e.status : null);
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      if (id === requestIdRef.current) setSearching(false);
-    }
+    void doSearch(request);
   }
 
-  function searchFromInput(list = checked, nameMode = byName) {
-    void doSearch(inputRef.current?.value ?? "", list, nameMode);
+  /** Re-run what failed, not what the input box happens to hold now. */
+  function retryFailure() {
+    if (!failure) return;
+    if (failure.retry === "indexes") void loadIndexes();
+    else void doSearch(failure.retry);
   }
 
   /** The submitted search the next page may continue from; null means "do not request another page". */
   function nextPageSource(): SubmittedSearch | null {
     return pagingSource({
       submitted: submittedRef.current,
-      loaded: results?.length ?? 0,
+      results,
       total,
       busy: loadingMore || searching,
-      error,
+      error: failure?.message ?? "",
     });
   }
 
@@ -252,23 +271,22 @@ export default function Search() {
   async function loadMore() {
     const source = nextPageSource();
     if (!source) return;
-    const id = ++requestIdRef.current;
+    const offset = source.results.length;
     setLoadingMore(true);
-    try {
-      const data = await searchFiles(source.q, source.file, source.mode, PAGE_SIZE, source.count);
-      if (id !== requestIdRef.current) return;
-      // The list still belongs to this search, one page longer
-      submittedRef.current = { ...source, count: source.count + data.results.length };
-      startTransition(() => {
-        setResults((prev) => [...(prev ?? []), ...data.results]);
-      });
-    } catch (e) {
-      if (id !== requestIdRef.current) return;
-      setErrorStatus(e instanceof ApiError ? e.status : null);
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      if (id === requestIdRef.current) setLoadingMore(false);
-    }
+    await runLatest(
+      gate,
+      () => searchFiles(source.q, source.file, source.mode, PAGE_SIZE, offset),
+      (data) => {
+        // The appended list still belongs to this search, so paging may continue from it
+        const grown = [...source.results, ...data.results];
+        submittedRef.current = { ...source, results: grown };
+        startTransition(() => {
+          setResults(grown);
+        });
+      },
+      (f) => setFailure({ ...f, retry: source }),
+      () => setLoadingMore(false),
+    );
   }
 
   const [displayResults, leavingResultKeys] = useListTransition(results ?? EMPTY_RESULTS, resultKey);
@@ -285,7 +303,8 @@ export default function Search() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [loadingMore, searching, error, results?.length, total]);
+    // `results` is the list identity the paging decision compares against, so arming follows it exactly
+  }, [loadingMore, searching, failure, results, total]);
 
   function toggleOne(name: string, on: boolean) {
     const next = on ? [...checked, name] : checked.filter((v) => v !== name);
@@ -382,7 +401,7 @@ export default function Search() {
                       {...props}
                       variant="secondary"
                       shape="square"
-                      icon={<X />}
+                      icon={<XIcon />}
                       aria-label={t("Close")}
                     />
                   )}
@@ -457,7 +476,7 @@ export default function Search() {
             shape="square"
             aria-label={t("Clear input")}
             title={t("Clear input")}
-            icon={<X />}
+            icon={<XIcon />}
             onClick={clearInput}
           />
           <Button
@@ -474,24 +493,30 @@ export default function Search() {
             aria-label={t("Debug mode")}
             aria-pressed={debug}
             title={t("Debug mode: show detailed performance info")}
-            icon={<Bug />}
+            icon={<BugIcon />}
             onClick={toggleDebug}
           />
         </div>
       </div>
 
-      <Fade show={!!error}>
+      <Fade show={!!failure}>
         <ErrorNotice
-          title={errorStatus ? t("Search failed ({0})", { 0: errorStatus }) : t("Search failed")}
-          message={error}
-          onRetry={() => searchFromInput()}
-          retryDisabled={searching}
+          title={
+            failure?.retry === "indexes"
+              ? t("Load failed")
+              : failure?.status
+                ? t("Search failed ({0})", { 0: failure.status })
+                : t("Search failed")
+          }
+          message={failure?.message ?? ""}
+          onRetry={retryFailure}
+          retryDisabled={searching || loadingIndexes}
         />
       </Fade>
 
       {/* Stacked grid: the three alternative states cross-fade in the same cell instead of shifting the page */}
       <div className="mt-6 grid">
-        <Fade show={results === null && !searching && !error} className="[grid-area:1/1]">
+        <Fade show={results === null && !searching && !failure} className="[grid-area:1/1]">
           <Empty
             title={t("Type a keyword to start searching")}
             description={t("Press Enter or click the search button; match by name or path")}

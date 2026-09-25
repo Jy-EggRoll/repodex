@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Tabs, Button, DropdownMenu } from "@cloudflare/kumo";
-import { Sun, Moon, Desktop, GithubLogo, Translate } from "@phosphor-icons/react";
+import { SunIcon, MoonIcon, DesktopIcon, GithubLogoIcon, TranslateIcon } from "@phosphor-icons/react";
 import RepoList from "./components/RepoList";
 import Search from "./components/Search";
 import { loadSetting, applyTheme, subscribeSystem, type ThemeSetting } from "./theme";
@@ -15,10 +15,10 @@ import i18n, {
 import { CONTENT_MAX_W, SHELL_PADDING, PANEL, HEADER_SHADOW, CONTENT_SHADOW } from "./ui";
 import { DEMO } from "./api";
 
-const THEME_META: Record<ThemeSetting, { icon: typeof Sun; labelKey: string }> = {
-  auto: { icon: Desktop, labelKey: "Follow system" },
-  light: { icon: Sun, labelKey: "Light" },
-  dark: { icon: Moon, labelKey: "Dark" },
+const THEME_META: Record<ThemeSetting, { icon: typeof SunIcon; labelKey: string }> = {
+  auto: { icon: DesktopIcon, labelKey: "Follow system" },
+  light: { icon: SunIcon, labelKey: "Light" },
+  dark: { icon: MoonIcon, labelKey: "Dark" },
 };
 
 const LANGUAGE_OPTIONS: LanguageSetting[] = ["auto", "en", "zh-cn"];
@@ -59,7 +59,7 @@ function LanguageMenuItem({
 }) {
   const { t } = useTranslation();
   return (
-    <DropdownMenu.Item icon={Translate} selected={value === current} onClick={() => onSelect(value)}>
+    <DropdownMenu.Item icon={TranslateIcon} selected={value === current} onClick={() => onSelect(value)}>
       {languageLabel(value, t("Follow system"))}
     </DropdownMenu.Item>
   );
@@ -122,7 +122,7 @@ export default function App() {
               shape="square"
               aria-label={t("GitHub repository")}
               title={t("GitHub repository")}
-              icon={<GithubLogo />}
+              icon={<GithubLogoIcon />}
               onClick={() =>
                 window.open("https://github.com/Jy-EggRoll/repodex", "_blank", "noopener,noreferrer")
               }
@@ -149,7 +149,7 @@ export default function App() {
                     shape="square"
                     aria-label={t("Switch language (current: {0})", { 0: langLabel })}
                     title={langLabel}
-                    icon={<Translate />}
+                    icon={<TranslateIcon />}
                   />
                 )}
               />
