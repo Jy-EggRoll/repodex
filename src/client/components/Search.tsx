@@ -18,6 +18,7 @@ import { buildHighlighted } from "../../highlight";
 import { matchRanges } from "../../match";
 import type { SearchResult } from "../../types";
 import { useEnterOnce, useListTransition } from "../hooks";
+import { pagingSource, type SearchRequest, type SubmittedSearch } from "../paging";
 import ResultCard from "./ResultCard";
 import ErrorNotice from "./ErrorNotice";
 import Fade from "./Fade";
@@ -157,6 +158,8 @@ export default function Search() {
   const inputRef = useRef<HTMLInputElement>(null);
   // Monotonic request id: stale responses are dropped so results converge on the last submission
   const requestIdRef = useRef(0);
+  // The search that produced the list on screen: paging follows this, never the live input value
+  const submittedRef = useRef<SubmittedSearch | null>(null);
 
   useEffect(() => {
     async function loadIndexes() {
@@ -203,16 +206,17 @@ export default function Search() {
     setSearching(true);
     // A new search supersedes any in-flight load-more; clear its state so the spinner cannot stick
     setLoadingMore(false);
+    const request: SearchRequest = {
+      q: v,
+      file: buildFileParam(list, indexes.length),
+      mode: nameMode ? "name" : "path",
+    };
     try {
       const tStart = performance.now();
-      const data = await searchFiles(
-        v,
-        buildFileParam(list, indexes.length),
-        nameMode ? "name" : "path",
-        PAGE_SIZE,
-        0,
-      );
+      const data = await searchFiles(request.q, request.file, request.mode, PAGE_SIZE, 0);
       if (id !== requestIdRef.current) return;
+      // Paging follows this response: editing the input box later cannot change what "next page" means
+      submittedRef.current = { ...request, count: data.results.length };
       setTotal(data.total);
       setFileCount(data.fileCount);
       setDirCount(data.dirCount);
@@ -233,22 +237,28 @@ export default function Search() {
     void doSearch(inputRef.current?.value ?? "", list, nameMode);
   }
 
-  // Infinite scroll: reaching the bottom requests and appends the next page
+  /** The submitted search the next page may continue from; null means "do not request another page". */
+  function nextPageSource(): SubmittedSearch | null {
+    return pagingSource({
+      submitted: submittedRef.current,
+      loaded: results?.length ?? 0,
+      total,
+      busy: loadingMore || searching,
+      error,
+    });
+  }
+
+  // Infinite scroll: reaching the bottom requests and appends the next page of the submitted search
   async function loadMore() {
-    if (results === null || loadingMore || searching) return;
-    if (results.length >= total) return;
+    const source = nextPageSource();
+    if (!source) return;
     const id = ++requestIdRef.current;
     setLoadingMore(true);
     try {
-      const q = inputRef.current?.value ?? "";
-      const data = await searchFiles(
-        q,
-        buildFileParam(checked, indexes.length),
-        byName ? "name" : "path",
-        PAGE_SIZE,
-        results.length,
-      );
+      const data = await searchFiles(source.q, source.file, source.mode, PAGE_SIZE, source.count);
       if (id !== requestIdRef.current) return;
+      // The list still belongs to this search, one page longer
+      submittedRef.current = { ...source, count: source.count + data.results.length };
       startTransition(() => {
         setResults((prev) => [...(prev ?? []), ...data.results]);
       });
@@ -261,12 +271,12 @@ export default function Search() {
     }
   }
 
-  const hasMore = results !== null && results.length < total;
   const [displayResults, leavingResultKeys] = useListTransition(results ?? EMPTY_RESULTS, resultKey);
 
   useEffect(() => {
     const el = sentinelRef.current;
-    if (!el || !hasMore || loadingMore || searching) return;
+    // Re-armed on every value the paging decision reads, so the observer never holds a stale decision
+    if (!el || !nextPageSource()) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((en) => en.isIntersecting)) void loadMore();
@@ -275,7 +285,7 @@ export default function Search() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasMore, loadingMore, searching, results?.length]);
+  }, [loadingMore, searching, error, results?.length, total]);
 
   function toggleOne(name: string, on: boolean) {
     const next = on ? [...checked, name] : checked.filter((v) => v !== name);
