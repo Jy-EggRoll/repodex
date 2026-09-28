@@ -1,13 +1,22 @@
 import { t } from "./i18n";
+import { PAGE_SIZE } from "./ui";
 import type { RepoInfo, SearchResult } from "../types";
 
 // Demo build switch: VITE_DEMO=1 serves locally synthesized data (dynamically imported, zero residue in production bundles)
 export const DEMO = import.meta.env.VITE_DEMO === "1";
 
+/**
+ * Translate a failed response body's error code, falling back to a generic status message. Single
+ * source for both the fetch path below and the demo pipeline (src/client/demo-search.ts).
+ */
+export function translateError(body: { error?: string } | null, status: number): string {
+  return body?.error ? t(body.error) : t("Request failed ({0})", { 0: status });
+}
+
 /** Read the server error code (if any) and translate it; falls back to a generic message. */
 async function errorMessage(res: Response): Promise<string> {
   const body = (await res.json().catch(() => null)) as { error?: string } | null;
-  return body?.error ? t(body.error) : t("Request failed ({0})", { 0: res.status });
+  return translateError(body, res.status);
 }
 
 export async function fetchRepos(): Promise<RepoInfo[]> {
@@ -59,7 +68,7 @@ export async function searchFiles(
   q: string,
   fileParam: string,
   mode: "path" | "name",
-  limit = 100,
+  limit = PAGE_SIZE,
   offset = 0,
 ): Promise<SearchResponse> {
   if (DEMO) return (await import("./demo-search")).searchIndexes(q, fileParam, mode, limit, offset);
