@@ -419,6 +419,19 @@ describe("runSearch telemetry and failures", () => {
     expect(res.body.indexCount).toBe(1);
   });
 
+  it("an offset at or past the score cap returns an empty 200 page against a capped total", async () => {
+    const files = Array.from({ length: 1200 }, (_, i) => [`match-${i}.txt`, 1] as [string, number]);
+    const spec = { full: "o/many", branches: { main: { files, dirs: [] } } };
+    const get = world([spec], 300);
+    for (const offset of ["1000", "5000"]) {
+      const res = await run(get, { q: "match", offset });
+      expect(res.status).toBe(200);
+      expect(res.body.results).toEqual([]);
+      expect(res.body.total).toBe(1000);
+      expect(res.body.truncated).toBe(true);
+    }
+  });
+
   it("a plan-promised but missing chunk counts as a load failure and keeps partial results", async () => {
     const spec: RepoSpec = {
       full: "o/x",

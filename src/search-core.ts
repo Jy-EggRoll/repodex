@@ -25,9 +25,13 @@ export interface Outcome {
 /** Minimal KV access: the plan and its chunks are the only keys the engine reads. */
 export type KvGet = (key: string) => Promise<string | null>;
 
-// Max items returned per response (prevents transport blowup); pairs with limit/offset paging to fetch everything
+// Max items returned per response (prevents transport blowup). It must stay <= SCORE_CAP: only the
+// first SCORE_CAP matches are ever collected and sorted, so SCORE_CAP is also the highest offset that
+// can still return items -- a larger MAX_RESULTS would only allow pages that are guaranteed empty.
 export const MAX_RESULTS = 1000;
-// Match collection cap: stop once full and mark total as approximate; a fuse for short-query memory/CPU
+// Match collection cap: scanning stops once this many matches are scored and sets `truncated`, which
+// marks the reported total as approximate -- it is the number of matches scored so far, not the
+// corpus's true hit count. A fuse for short-query memory/CPU.
 export const SCORE_CAP = 1000;
 // Load concurrency: bounded peak memory while streaming load -> scan -> discard
 export const LOAD_CONCURRENCY = 6;
@@ -306,9 +310,12 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
     const searchMs = scanMs;
 
     // Phase 2: after sorting, take the offset/limit page and re-run matching only for this page's
-    // items to build highlight ranges
+    // items to build highlight ranges. `limit` is already clamped to MAX_RESULTS above, so the page
+    // cannot exceed the transport cap; an offset beyond the scored matches simply yields an empty
+    // page. The scored list is capped at SCORE_CAP, so offset >= SCORE_CAP is always empty (and
+    // truncated, since a total that large means the cap was reached).
     scored.sort((a, b) => compareRank(a.key, b.key));
-    const page = scored.slice(offset, offset + limit).slice(0, MAX_RESULTS);
+    const page = scored.slice(offset, offset + limit);
     const results: SearchResult[] = page.map((s) => {
       const target = mode === "name" ? s.name || "" : s.path || s.name || "";
       const ranges = matchRanges(target, q) ?? [];
