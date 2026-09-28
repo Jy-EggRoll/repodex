@@ -61,13 +61,13 @@ Repository risk badges: `>900MB` danger, `800–900MB` warning, `<800MB` safe. Y
 
 All you need is one Cloudflare account (no credit card required). Five steps, six secrets total — overview first (details in each step):
 
-| Secret            | Where to set                     | Purpose                                                                  |
-| ----------------- | -------------------------------- | ------------------------------------------------------------------------ |
-| `CF_ACCOUNT_ID`   | This repo, Actions secrets       | KV endpoint                                                              |
-| `CF_NAMESPACE_ID` | This repo, Actions secrets       | KV endpoint                                                              |
-| `CF_API_TOKEN`    | This repo, Actions secrets       | Writes to KV (needs Workers KV Storage write permission)                 |
-| `REPOS_PAT`       | This repo, Actions secrets       | Reads repo file trees for central indexing (classic token, `repo` scope) |
-| `USER` / `PSWD`   | Worker variables ("secret" type) | Site login                                                               |
+| Secret            | Where to set                     | Purpose                                                                       |
+| ----------------- | -------------------------------- | ----------------------------------------------------------------------------- |
+| `CF_ACCOUNT_ID`   | This repo, Actions secrets       | Cloudflare account ID (used by the KV API)                                    |
+| `CF_NAMESPACE_ID` | This repo, Actions secrets       | The KV namespace central indexing writes to (must match the Worker's binding) |
+| `CF_API_TOKEN`    | This repo, Actions secrets       | Writes to KV (needs Workers KV Storage write permission)                      |
+| `REPOS_PAT`       | This repo, Actions secrets       | Reads repo file trees for central indexing (classic token, `repo` scope)      |
+| `USER` / `PSWD`   | Worker variables ("secret" type) | Site login                                                                    |
 
 ### 1. Fork and connect
 
@@ -87,11 +87,15 @@ Connect to GitHub (grant authorization if asked) and pick your fork.
 >
 > Build settings: build command `pnpm build`, deploy command `npx wrangler deploy`. Deployment fails without the build command (the output directory `dist/` is already configured in `wrangler.jsonc`, no need to specify it).
 
-### 2. Three things on the Cloudflare side
+### 2. On the Cloudflare side: KV and token
 
 ![Create KV](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-3.png)
 
-Create a KV namespace (any name), refresh the page, and copy its ID (= `CF_NAMESPACE_ID`).
+No need to create the KV namespace by hand. The `kv_namespaces` binding in `wrangler.jsonc` deliberately omits `id` (Wrangler's automatic provisioning), so the first deploy creates the namespace for you, named after the Worker (`repodex-repo-index-kv`); later deploys reuse the same one instead of creating more. After deploying, open Workers & Pages → KV, find it by that name, and copy its ID (= `CF_NAMESPACE_ID`). Because the deploy runs in Cloudflare's build environment (CI), Wrangler does not write the generated id back into the repo, so copy it into Actions secrets yourself.
+
+> [!NOTE]
+>
+> `CF_NAMESPACE_ID` must be the same namespace the Worker is bound to — otherwise central indexing writes to A while the Worker reads B, and search keeps returning `index not ready`. If the first deploy did not create the KV automatically, create one manually, then point the Worker's KV binding at it from the Cloudflare dashboard, and keep `CF_NAMESPACE_ID` in sync. Do not write the ID back into the binding in this repo: that would bake an account-specific ID into every fork and defeat the deliberate omission of `id` here.
 
 ![Create token](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-4.png)
 
@@ -117,7 +121,7 @@ Create a token with the Workers KV Storage permission. It is shown only once (= 
 
 The central workflow (`.github/workflows/central-index.yml`) generates every index — **no per-repo configuration**:
 
-- Auto-discovery: scans all of your repositories — personal, organization, and collaborator — at the top of every hour (archived/disabled skipped), compares branch SHAs, and processes only changed repositories; the rest are skipped without any per-repo output.
+- Auto-discovery: scans all of your repositories — personal, organization, and collaborator — at minute 42 of every hour (deliberately off the hour, when GitHub runners are less contended; archived/disabled skipped), compares branch SHAs, and processes only changed repositories; the rest are skipped without any per-repo output.
 - Blocklist: add one `owner/repo` line to `repos-blocklist.txt` to exclude a repository.
 - Manual runs: Actions → Central Repository Index → Run workflow (optionally a single repo, or a dry-run preview that only reports counts).
 - Cleanup: indexes of deleted repositories are pruned automatically. The first run backfills everything; later runs are incremental.
@@ -142,7 +146,7 @@ Smoke test: ① the home page loads and login works ② a keyword returns result
 
 An automation workflow in this repository (`.github/workflows/central-index.yml` + `scripts/generate_index.mjs`, zero dependencies, using the fetch built into Node 24).
 
-Every hour (or on manual dispatch) it scans all repositories, compares branch SHAs against the KV record, pulls file trees and merges the global index only for changed repositories, writes it into Cloudflare KV, and prunes indexes of deleted repositories (leftover keys from retired index formats are cleaned up too).
+At minute 42 of every hour (deliberately off the hour mark), or on manual dispatch, it scans all repositories, compares branch SHAs against the KV record, pulls file trees and merges the global index only for changed repositories, writes it into Cloudflare KV, and prunes indexes of deleted repositories (leftover keys from retired index formats are cleaned up too).
 
 Search is served by a Durable Object (its 30s CPU budget replaces the 10ms Worker limit on the free plan), which loads index chunks in batches — corpus size no longer causes 503s.
 

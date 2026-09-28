@@ -10,6 +10,13 @@
   },
   "kv_namespaces": [
     {
+      // Deliberately no "id": Wrangler's automatic provisioning creates the namespace on deploy from
+      // a binding declared without a resource id, naming it after the worker. Every fork thus gets its
+      // own KV, and no account-specific id is baked into the repo; adding an "id" would pin this repo
+      // to one account and break forks. Docs (workers/wrangler/configuration, "Automatic provisioning"):
+      // https://developers.cloudflare.com/workers/wrangler/configuration/
+      // Caveat: deploying from the dashboard (for example, via GitHub) still provisions the namespace,
+      // but its id stays visible only in the dashboard and is not written back to this file.
       "binding": "repo_index_kv",
     },
   ],

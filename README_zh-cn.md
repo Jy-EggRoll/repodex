@@ -50,8 +50,8 @@ RepoDex（RepositoryIndex——仓库索引聚合）：基于 GitHub Actions、C
 
 | Secret            | 配在哪里                 | 用途                                              |
 | ----------------- | ------------------------ | ------------------------------------------------- |
-| `CF_ACCOUNT_ID`   | 本仓库 Actions Secrets   | KV 地址                                           |
-| `CF_NAMESPACE_ID` | 本仓库 Actions Secrets   | KV 地址                                           |
+| `CF_ACCOUNT_ID`   | 本仓库 Actions Secrets   | Cloudflare 账号 ID（KV API 用）                   |
+| `CF_NAMESPACE_ID` | 本仓库 Actions Secrets   | 中央索引写入的 KV（须与 Worker 绑定同一个）       |
 | `CF_API_TOKEN`    | 本仓库 Actions Secrets   | 写 KV（需 Workers KV Storage 写权限）             |
 | `REPOS_PAT`       | 本仓库 Actions Secrets   | 中央索引读取仓库文件树（经典 token，`repo` 权限） |
 | `USER` / `PSWD`   | Workers 变量（选“密钥”） | 站点登录                                          |
@@ -74,11 +74,15 @@ RepoDex（RepositoryIndex——仓库索引聚合）：基于 GitHub Actions、C
 >
 > 构建设置：构建命令填 `pnpm build`，部署命令填 `npx wrangler deploy`。漏掉构建命令会部署失败（产物目录 `dist/` 已在 `wrangler.jsonc` 配好，无需指定输出目录）。
 
-### 2. Cloudflare 侧三项
+### 2. Cloudflare 侧：KV 与令牌
 
 ![创建-KV](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-3.png)
 
-按图创建 KV，名称随意，刷新后复制 ID（= `CF_NAMESPACE_ID`）。
+KV 无需手动创建：`wrangler.jsonc` 的 `kv_namespaces` 绑定故意不写 `id`（Wrangler 的自动供应机制），首次部署时会自动创建命名空间，命名以 Worker 名为前缀（形如 `repodex-repo-index-kv`），之后重复部署复用同一个，不会重复新建。部署完成后进入 Workers & Pages → KV，按该名称找到它并复制 ID（= `CF_NAMESPACE_ID`）。由于部署在 Cloudflare 构建环境（CI）中执行，Wrangler 不会把自动生成的 id 写回仓库，需要你手动复制到 Actions Secrets。
+
+> [!NOTE]
+>
+> `CF_NAMESPACE_ID` 必须与 Worker 实际绑定的命名空间是同一个，否则中央索引写入 A、Worker 读取 B，搜索会一直返回 `index not ready`。万一首次部署没有自动创建 KV，可以手动新建一个，然后在 Cloudflare 后台把 Worker 的 KV 绑定指向它，再同步填入 `CF_NAMESPACE_ID`。请不要把 ID 写回仓库里的绑定：那会把账号 ID 固化进每个 fork，违背这里刻意不写 `id` 的设计。
 
 ![创建令牌](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/image-4.png)
 
@@ -104,7 +108,7 @@ RepoDex（RepositoryIndex——仓库索引聚合）：基于 GitHub Actions、C
 
 中央工作流（`.github/workflows/central-index.yml`）统一生成索引，**各仓库无需任何配置**：
 
-- 自动发现：每小时整点扫描你的全部仓库（个人、组织、协作，归档/禁用跳过），对比分支 SHA，只处理有变化的仓库，无变化直接跳过（不输出仓库名）。
+- 自动发现：每小时 42 分扫描你的全部仓库（刻意避开整点，GitHub runner 竞争更小；个人、组织、协作，归档/禁用跳过），对比分支 SHA，只处理有变化的仓库，无变化直接跳过（不输出仓库名）。
 - 黑名单：`repos-blocklist.txt` 加一行 `owner/repo` 即可排除。
 - 手动补跑：Actions → Central Repository Index → Run workflow（可指定单个仓库、可 dry-run 只出统计预览）。
 - 删库清理：仓库删除后索引 key 自动清理。首次运行全量 backfill，之后增量。
@@ -131,7 +135,7 @@ RepoDex（RepositoryIndex——仓库索引聚合）：基于 GitHub Actions、C
 
 工作流的任务：
 
-每小时整点（或手动触发）扫描名下所有仓库，对比 KV 中记录的分支 SHA，只对有变化的仓库拉取文件树、生成统一的全局索引并推送至 Cloudflare KV 存储，同时清理已删除仓库的僵尸索引（旧版索引格式的残留 key 也会一并清掉）。
+每小时 42 分（刻意避开整点；或手动触发）扫描名下所有仓库，对比 KV 中记录的分支 SHA，只对有变化的仓库拉取文件树、生成统一的全局索引并推送至 Cloudflare KV 存储，同时清理已删除仓库的僵尸索引（旧版索引格式的残留 key 也会一并清掉）。
 
 搜索由 Durable Object 执行（免费版下其 30s CPU 预算取代了普通 Worker 的 10ms 上限），按批加载索引分片——语料规模不再引发 503。
 
