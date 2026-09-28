@@ -9,7 +9,8 @@
 // a bounded recency boost when ranking. The data comes from the repo list fetched below, so it costs
 // no extra API calls.
 //
-// Zero dependencies (Node 18+ built-in fetch). Required environment variables:
+// Zero dependencies (Node 18+ built-in fetch; the threshold import needs Node 22.18+ type stripping).
+// Required environment variables:
 //   REPOS_PAT        GitHub token that can read every indexed repository. Discovery covers personal
 //                    repos, organization repos, and repos where you are a collaborator. A classic PAT
 //                    with `repo` scope reaches all of them; a fine-grained token (Contents + Metadata
@@ -21,6 +22,13 @@
 //   DRY_RUN          Optional, set to 1 to report only without writing KV
 
 import { pathToFileURL } from "node:url";
+// Imported with their .ts extension so Node's built-in type stripping loads the single sources
+// directly: the size thresholds and the chunk payload convention, with no second copy to drift.
+import { riskForSize } from "../src/risk.ts";
+import { chunkBranchItems, encodeChunk } from "../src/chunk.ts";
+
+// Re-exported for the contract tests, which assert the encoded payload this module writes
+export { encodeChunk };
 
 const GH_API = "https://api.github.com";
 const CF_API = "https://api.cloudflare.com/client/v4";
@@ -32,7 +40,6 @@ const PLAN_KEY = "__meta-plan";
 // happily skip repositories that never got chunked)
 const FORMAT_KEY = "__format";
 const FORMAT_VERSION = 3;
-const CHUNK_ITEMS = 20000;
 const CHUNK_KEY_RE = /@\d+$/;
 
 // Terminal colors go to stderr only (console logs); stdout is reserved for clean markdown in the Summary
@@ -212,38 +219,20 @@ export function buildBranchItems(branchName, entries) {
   return { branch: branchName, items: [...items, ...directories] };
 }
 
-/** Paths are stored without a leading "./" or "/" (readers re-derive names from the path). */
-function stripDotSlash(p) {
-  return String(p ?? "")
-    .replace(/^\.\//, "")
-    .replace(/^\//, "");
-}
-
-/** Compact chunk payload: [[t, path, size], ...] with t=0 file / t=1 directory; directories omit size. */
-export function encodeChunk(items) {
-  return items.map((item) =>
-    item.type === "directory" ? [1, stripDotSlash(item.path)] : [0, stripDotSlash(item.path), item.size ?? 0],
-  );
-}
-
-/** Split one repository's branches into chunks; a branch never spans chunks. */
+/** Split one repository's branches into chunks; a branch never spans chunks (see src/chunk.ts). */
 export function buildChunkWrites(repo, branches) {
   const chunks = [];
   let index = 0;
   let total = 0;
-  for (const branch of branches ?? []) {
-    const items = branch.items ?? [];
-    for (let i = 0; i < items.length; i += CHUNK_ITEMS) {
-      const slice = items.slice(i, i + CHUNK_ITEMS);
-      chunks.push({
-        key: `${repo.fullName}@${index}`,
-        branch: branch.branch,
-        n: slice.length,
-        value: encodeChunk(slice),
-      });
-      index += 1;
-      total += slice.length;
-    }
+  for (const segment of chunkBranchItems(branches)) {
+    chunks.push({
+      key: `${repo.fullName}@${index}`,
+      branch: segment.branch,
+      n: segment.items.length,
+      value: encodeChunk(segment.items),
+    });
+    index += 1;
+    total += segment.items.length;
   }
   return { chunks, repo: { r: repo.fullName, n: total } };
 }
@@ -285,7 +274,7 @@ export function buildRepoInfo(repos) {
       full_name: repo.full_name ?? "",
       size: sizeKb,
       size_mb: sizeMb,
-      risk: sizeMb < 800 ? "safe" : sizeMb <= 900 ? "warn" : "danger",
+      risk: riskForSize(sizeMb),
       description: repo.description ?? null,
       html_url: repo.html_url ?? "",
     });
