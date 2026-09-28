@@ -33,6 +33,7 @@
   "No matching indexes": "无匹配索引",
   "No matching repositories": "无匹配仓库",
   "No repository data": "暂无仓库数据",
+  "Only the first {0} matches are shown": "仅展示前 {0} 条匹配结果",
   "Press Enter or click the search button; match by name or path": "回车或点击搜索按钮，可按名称或路径匹配",
   "RepoDex – Repository info and file search": "RepoDex – 仓库信息与文件搜索",
   "RepoDex: fuzzy file search across GitHub repositories and branches, with pinyin and Chinese filename support.": "RepoDex：跨仓库、跨分支的 GitHub 文件模糊搜索，支持拼音与中文文件名。",

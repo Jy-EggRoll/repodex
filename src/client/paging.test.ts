@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { SearchResult } from "../types";
-import { pagingSource, type PagingState, type SubmittedSearch } from "./paging";
+import {
+  pagingSource,
+  resultsExhausted,
+  truncationNoticeVisible,
+  type PagingState,
+  type SubmittedSearch,
+} from "./paging";
 
 function item(name: string): SearchResult {
   return {
@@ -70,5 +76,36 @@ describe("pagingSource", () => {
     const grownSearch: SubmittedSearch = { ...submitted, results: grown };
     expect(pagingSource(state({ submitted: grownSearch, results: grown, total: 350 }))).toEqual(grownSearch);
     expect(pagingSource(state({ submitted: grownSearch, results: list }))).toBeNull();
+  });
+});
+
+describe("resultsExhausted", () => {
+  it("is false before any list exists and while matches remain", () => {
+    expect(resultsExhausted(null, 0)).toBe(false);
+    expect(resultsExhausted(null, 350)).toBe(false);
+    expect(resultsExhausted(list, 350)).toBe(false);
+  });
+
+  it("is true once the list holds as many items as the reported total", () => {
+    expect(resultsExhausted(list, 2)).toBe(true);
+    expect(resultsExhausted(list, 0)).toBe(true);
+  });
+});
+
+describe("truncationNoticeVisible", () => {
+  it("shows only for a truncated search whose list has reached the cap", () => {
+    expect(truncationNoticeVisible({ results: list, total: 2, truncated: true })).toBe(true);
+  });
+
+  it("stays hidden while the capped list can still load more pages", () => {
+    expect(truncationNoticeVisible({ results: list, total: 1000, truncated: true })).toBe(false);
+  });
+
+  it("stays hidden for a complete, untruncated result set", () => {
+    expect(truncationNoticeVisible({ results: list, total: 2, truncated: false })).toBe(false);
+  });
+
+  it("stays hidden before any list exists", () => {
+    expect(truncationNoticeVisible({ results: null, total: 0, truncated: true })).toBe(false);
   });
 });

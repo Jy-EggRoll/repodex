@@ -42,6 +42,26 @@ export interface PagingState {
 }
 
 /**
+ * Whether the list on screen has reached its end, so no further page can add a result. A truncated
+ * search reports the number of matches it scored as `total`, so this stops exactly at the cap.
+ */
+export function resultsExhausted(results: SearchResult[] | null, total: number): boolean {
+  return results !== null && results.length >= total;
+}
+
+/**
+ * Whether to tell the user the server capped matching and the list therefore stops at `total`. Only
+ * shown once the list is exhausted; while more pages remain the count itself already says so.
+ */
+export function truncationNoticeVisible(state: {
+  results: SearchResult[] | null;
+  total: number;
+  truncated: boolean;
+}): boolean {
+  return state.truncated && resultsExhausted(state.results, state.total);
+}
+
+/**
  * The submitted search the next page may continue from, or null when no page may be requested.
  * Returning the source rather than a boolean keeps the query, the selection and the offset (the
  * length of `results`) consistent by construction.
@@ -50,6 +70,6 @@ export function pagingSource(state: PagingState): SubmittedSearch | null {
   const { submitted, results, total, busy, error } = state;
   if (!submitted || !results || busy || error) return null;
   if (submitted.results !== results) return null;
-  if (results.length >= total) return null;
+  if (resultsExhausted(results, total)) return null;
   return submitted;
 }

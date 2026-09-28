@@ -18,7 +18,7 @@ import { buildHighlighted } from "../../highlight";
 import { matchRanges } from "../../match";
 import type { SearchResult } from "../../types";
 import { useEnterOnce, useListTransition } from "../hooks";
-import { pagingSource, type SearchRequest, type SubmittedSearch } from "../paging";
+import { pagingSource, truncationNoticeVisible, type SearchRequest, type SubmittedSearch } from "../paging";
 import { createRequestGate, requestFailure, runLatest } from "../request";
 import ResultCard from "./ResultCard";
 import ErrorNotice from "./ErrorNotice";
@@ -580,6 +580,11 @@ export default function Search() {
             <LoadingRow center>
               {t("Loading more (showing {0} / {1} total)", { 0: results?.length ?? 0, 1: total })}
             </LoadingRow>
+          )}
+          {truncationNoticeVisible({ results, total, truncated: perf?.truncated === true }) && (
+            <div className="border-kumo-line bg-kumo-base text-kumo-subtle mt-4 rounded-lg border p-3 text-center text-sm">
+              {t("Only the first {0} matches are shown", { 0: total })}
+            </div>
           )}
         </Fade>
       </div>

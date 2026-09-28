@@ -33,6 +33,7 @@
   "No matching indexes": "No matching indexes",
   "No matching repositories": "No matching repositories",
   "No repository data": "No repository data",
+  "Only the first {0} matches are shown": "Only the first {0} matches are shown",
   "Press Enter or click the search button; match by name or path": "Press Enter or click the search button; match by name or path",
   "RepoDex – Repository info and file search": "RepoDex – Repository info and file search",
   "RepoDex: fuzzy file search across GitHub repositories and branches, with pinyin and Chinese filename support.": "RepoDex: fuzzy file search across GitHub repositories and branches, with pinyin and Chinese filename support.",
