@@ -27,6 +27,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # scripts/generate_index.mjs imports ../src/*.ts, which needs Node's type stripping (>= 22.18).
+      # Pin the version instead of trusting whatever the runner image defaults to.
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
       - name: Sync
         env:
           REPOS_PAT: ${{ secrets.REPOS_PAT }}
