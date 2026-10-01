@@ -18,7 +18,13 @@ import { buildHighlighted } from "../../highlight";
 import { matchRanges } from "../../match";
 import type { SearchResult } from "../../types";
 import { useEnterOnce, useListTransition } from "../hooks";
-import { pagingSource, truncationNoticeVisible, type SearchRequest, type SubmittedSearch } from "../paging";
+import {
+  pagingSource,
+  totalAfterPage,
+  truncationNoticeVisible,
+  type SearchRequest,
+  type SubmittedSearch,
+} from "../paging";
 import { createRequestGate, requestFailure, runLatest } from "../request";
 import ResultCard from "./ResultCard";
 import ErrorNotice from "./ErrorNotice";
@@ -280,6 +286,9 @@ export default function Search() {
         // The appended list still belongs to this search, so paging may continue from it
         const grown = [...source.results, ...data.results];
         submittedRef.current = { ...source, results: grown };
+        // Re-read the total from this page, so an empty page ends paging even while the first page's
+        // total still claims more matches
+        setTotal(totalAfterPage(data, grown.length));
         startTransition(() => {
           setResults(grown);
         });

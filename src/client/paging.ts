@@ -50,6 +50,23 @@ export function resultsExhausted(results: SearchResult[] | null, total: number):
 }
 
 /**
+ * The total to report once a page arrived. The page's own count is the authority for the list it
+ * produced, so a total that predates a mid-scroll index rebuild cannot keep paging armed.
+ *
+ * A page that added nothing means the list cannot grow any further, so the total is pulled down to
+ * the list length. Without that, `resultsExhausted` stays false forever: the empty page leaves the
+ * length unchanged, the observer re-arms on every response, and the same offset is requested without
+ * end. A page that did add items still cannot report fewer matches than are already on screen.
+ */
+export function totalAfterPage(
+  page: { results: SearchResult[]; total: number },
+  grownLength: number,
+): number {
+  if (page.results.length === 0) return grownLength;
+  return Math.max(page.total, grownLength);
+}
+
+/**
  * Whether to tell the user the server capped matching and the list therefore stops at `total`. Only
  * shown once the list is exhausted; while more pages remain the count itself already says so.
  */

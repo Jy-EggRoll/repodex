@@ -3,6 +3,7 @@ import type { SearchResult } from "../types";
 import {
   pagingSource,
   resultsExhausted,
+  totalAfterPage,
   truncationNoticeVisible,
   type PagingState,
   type SubmittedSearch,
@@ -76,6 +77,30 @@ describe("pagingSource", () => {
     const grownSearch: SubmittedSearch = { ...submitted, results: grown };
     expect(pagingSource(state({ submitted: grownSearch, results: grown, total: 350 }))).toEqual(grownSearch);
     expect(pagingSource(state({ submitted: grownSearch, results: list }))).toBeNull();
+  });
+});
+
+describe("totalAfterPage", () => {
+  it("takes the total the page reported", () => {
+    expect(totalAfterPage({ results: [item("c.md")], total: 350 }, 3)).toBe(350);
+  });
+
+  it("never reports fewer matches than the list already shows", () => {
+    // An index rebuild mid-scroll can report fewer matches than are on screen
+    expect(totalAfterPage({ results: [item("c.md")], total: 2 }, 3)).toBe(3);
+  });
+
+  it("treats an empty page as the end of the list, whatever total it came with", () => {
+    // The storm case: the offset is past the matches that still exist, so the page is empty while a
+    // stale total claims more. The total must fall to the list length, or paging never stops.
+    expect(totalAfterPage({ results: [], total: 1000 }, 3)).toBe(3);
+  });
+
+  it("stops paging after that empty page instead of re-firing the same offset", () => {
+    const grown = [...list, item("c.md")];
+    const grownSearch: SubmittedSearch = { ...submitted, results: grown };
+    const total = totalAfterPage({ results: [], total: 350 }, grown.length);
+    expect(pagingSource(state({ submitted: grownSearch, results: grown, total }))).toBeNull();
   });
 });
 
