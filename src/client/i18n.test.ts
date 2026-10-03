@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import i18n, { applyLanguage, normalizeLocale } from "./i18n";
 import bundleEn from "../../l10n/bundle.l10n.json";
 import bundleZhCn from "../../l10n/bundle.l10n.zh-cn.json";
+import { ERROR_CODES } from "../types";
 
 const sourceModules = import.meta.glob(["./**/*.{ts,tsx}", "!./**/*.test.ts", "!./**/*.d.ts"], {
   query: "?raw",
@@ -57,6 +58,18 @@ describe("bundles", () => {
           if (!keys.has(match[1])) missing.push(`${file}: ${match[1]}`);
         }
       }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it("translates every server error code", () => {
+    // Server codes are translated at runtime through `t(body.error)` (see translateError in api.ts),
+    // so the literal scan above is blind to them. This walk over the shared table is the only thing
+    // tying the wire contract to the bundles; without it a new code silently renders as raw English.
+    const missing: string[] = [];
+    for (const [name, code] of Object.entries(ERROR_CODES)) {
+      if (!(code in bundleEn)) missing.push(`en missing: ${name} -> "${code}"`);
+      if (!(code in bundleZhCn)) missing.push(`zh-cn missing: ${name} -> "${code}"`);
     }
     expect(missing).toEqual([]);
   });

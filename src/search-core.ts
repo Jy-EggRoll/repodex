@@ -2,7 +2,7 @@ import { chunk } from "./batch";
 import { buildHighlighted } from "./highlight";
 import { matchRanges } from "./match";
 import { compareRank, rankKeyFromRanges, recencyBoost, type RankKey } from "./rank";
-import type { SearchResult } from "./types";
+import { ERROR_CODES, type ErrorCode, type SearchResult } from "./types";
 
 // Pure search pipeline, deliberately free of Cloudflare runtime imports (KV access is injected
 // through a get function) so the whole matching/selection logic can run under vitest unchanged.
@@ -187,14 +187,14 @@ export function resolveSelection(fileRaw: string, plan: SearchPlan): Selection {
   };
 }
 
-export function errorOutcome(status: number, error: string): Outcome {
+export function errorOutcome(status: number, error: ErrorCode): Outcome {
   return { status, json: JSON.stringify({ error }) };
 }
 
 export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> {
   const q = (spec.q || "").trim();
   const file = (spec.file || "all").trim();
-  if (!q) return errorOutcome(400, "empty query");
+  if (!q) return errorOutcome(400, ERROR_CODES.emptyQuery);
   // Paging: limit = page size (default 100, capped at MAX_RESULTS), offset = start index
   const limit = Math.min(Math.max(Number(spec.limit) || 100, 1), MAX_RESULTS);
   const offset = Math.max(Number(spec.offset) || 0, 0);
@@ -285,17 +285,17 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
 
   try {
     const plan = parsePlan(await get(PLAN_KEY).catch(() => null));
-    if (!plan) return errorOutcome(503, "index not ready, run Central Repository Index workflow first");
+    if (!plan) return errorOutcome(503, ERROR_CODES.indexNotReady);
     for (const rp of plan.repos) {
       if (typeof rp.t === "number" && Number.isFinite(rp.t)) repoTs.set(rp.r, rp.t);
     }
     const selection = resolveSelection(file, plan);
-    if (selection.kind === "invalid") return errorOutcome(400, "invalid file");
+    if (selection.kind === "invalid") return errorOutcome(400, ERROR_CODES.invalidFile);
 
     if (selection.kind === "all") {
       await loadChunks(plan.chunks);
     } else if (selection.kind === "single") {
-      if (!selection.known) return errorOutcome(404, "not found");
+      if (!selection.known) return errorOutcome(404, ERROR_CODES.notFound);
       await loadChunks(selection.chunks);
     } else {
       for (const name of selection.names) {
@@ -369,7 +369,8 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
       }),
     };
   } catch (err) {
-    return errorOutcome(500, String(err));
+    console.error("[search-core] unexpected error", err);
+    return errorOutcome(500, ERROR_CODES.internalError);
   }
 }
 

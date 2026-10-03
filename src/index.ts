@@ -4,7 +4,7 @@ import { basicAuth } from "hono/basic-auth";
 import { prettyJSON } from "hono/pretty-json";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { SearchEngine } from "./search-do";
-import type { RepoInfo } from "./types";
+import { ERROR_CODES, type RepoInfo } from "./types";
 
 type Bindings = {
   public_assets: Fetcher;
@@ -51,13 +51,13 @@ app.get("/api/get-repo-info", async (c) => {
     // KV read failed; fall through to the 503 below
   }
 
-  return c.json({ error: "index not ready, run Central Repository Index workflow first" }, 503);
+  return c.json({ error: ERROR_CODES.indexNotReady }, 503);
 });
 
 app.get("/api/search", async (c) => {
   const q = (c.req.query("q") || "").trim();
-  if (!q) return c.json({ error: "empty query" }, 400);
-  if (!c.env.repo_index_kv) return c.json({ error: "repo_index_kv binding is not available" }, 500);
+  if (!q) return c.json({ error: ERROR_CODES.emptyQuery }, 400);
+  if (!c.env.repo_index_kv) return c.json({ error: ERROR_CODES.kvUnavailable }, 500);
 
   try {
     const stub = c.env.SEARCH_ENGINE.get(c.env.SEARCH_ENGINE.idFromName("global"));
@@ -74,12 +74,13 @@ app.get("/api/search", async (c) => {
       "Content-Type": "application/json",
     });
   } catch (err) {
-    return c.json({ error: String(err) }, 500);
+    console.error("[api/search] unexpected error", err);
+    return c.json({ error: ERROR_CODES.internalError }, 500);
   }
 });
 
 app.get("/api/repo-list", async (c) => {
-  if (!c.env.repo_index_kv) return c.json({ error: "repo_index_kv binding is not available" }, 500);
+  if (!c.env.repo_index_kv) return c.json({ error: ERROR_CODES.kvUnavailable }, 500);
   try {
     const stub = c.env.SEARCH_ENGINE.get(c.env.SEARCH_ENGINE.idFromName("global"));
     // Same relay as /api/search: the plan grows with the corpus, so parsing it stays off the 10ms root budget
@@ -88,7 +89,8 @@ app.get("/api/repo-list", async (c) => {
       "Content-Type": "application/json",
     });
   } catch (err) {
-    return c.json({ error: String(err) }, 500);
+    console.error("[api/repo-list] unexpected error", err);
+    return c.json({ error: ERROR_CODES.internalError }, 500);
   }
 });
 

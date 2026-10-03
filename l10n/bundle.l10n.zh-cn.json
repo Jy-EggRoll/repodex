@@ -60,6 +60,8 @@
   "Warning": "警告",
   "empty query": "查询为空",
   "index not ready, run Central Repository Index workflow first": "索引尚未就绪，请先运行中央索引工作流",
+  "internal error": "内部错误",
   "invalid file": "无效的索引参数",
-  "not found": "索引不存在或已被清理"
+  "not found": "索引不存在或已被清理",
+  "repo_index_kv binding is not available": "索引存储（repo_index_kv）未绑定，请检查部署配置"
 }

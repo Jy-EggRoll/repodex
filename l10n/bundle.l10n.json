@@ -60,6 +60,8 @@
   "Warning": "Warning",
   "empty query": "empty query",
   "index not ready, run Central Repository Index workflow first": "index not ready, run Central Repository Index workflow first",
+  "internal error": "internal error",
   "invalid file": "invalid file",
-  "not found": "not found"
+  "not found": "not found",
+  "repo_index_kv binding is not available": "repo_index_kv binding is not available"
 }

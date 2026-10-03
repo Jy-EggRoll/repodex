@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { errorOutcome, runRepoList, runSearch, type Outcome, type SearchSpec } from "./search-core";
+import { ERROR_CODES } from "./types";
 
 interface Env {
   repo_index_kv: KVNamespace;
@@ -12,12 +13,12 @@ interface Env {
  */
 export class SearchEngine extends DurableObject<Env> {
   async search(spec: SearchSpec): Promise<Outcome> {
-    if (!this.env.repo_index_kv) return errorOutcome(500, "repo_index_kv binding is not available");
+    if (!this.env.repo_index_kv) return errorOutcome(500, ERROR_CODES.kvUnavailable);
     return runSearch((key) => this.env.repo_index_kv.get(key), spec);
   }
 
   async listIndexes(): Promise<Outcome> {
-    if (!this.env.repo_index_kv) return errorOutcome(500, "repo_index_kv binding is not available");
+    if (!this.env.repo_index_kv) return errorOutcome(500, ERROR_CODES.kvUnavailable);
     return runRepoList((key) => this.env.repo_index_kv.get(key));
   }
 }
