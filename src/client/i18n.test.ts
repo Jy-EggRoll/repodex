@@ -4,11 +4,14 @@ import bundleEn from "../../l10n/bundle.l10n.json";
 import bundleZhCn from "../../l10n/bundle.l10n.zh-cn.json";
 import { ERROR_CODES } from "../types";
 
-const sourceModules = import.meta.glob(["./**/*.{ts,tsx}", "!./**/*.test.ts", "!./**/*.d.ts"], {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
+const sourceModules = import.meta.glob(
+  ["./**/*.{ts,tsx}", "!./**/*.test.ts", "!./**/*.d.ts"],
+  {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  },
+) as Record<string, string>;
 
 function placeholders(text: string): string[] {
   return [...text.matchAll(/\{(\d+)\}/g)].map((m) => m[1]).sort();
@@ -35,11 +38,14 @@ describe("normalizeLocale", () => {
 
 describe("bundles", () => {
   it("keeps the same key set across locales", () => {
-    expect(Object.keys(bundleZhCn).sort()).toEqual(Object.keys(bundleEn).sort());
+    expect(Object.keys(bundleZhCn).sort()).toEqual(
+      Object.keys(bundleEn).sort(),
+    );
   });
 
   it("uses identity values in the English bundle", () => {
-    for (const [key, value] of Object.entries(bundleEn)) expect(value).toBe(key);
+    for (const [key, value] of Object.entries(bundleEn))
+      expect(value).toBe(key);
   });
 
   it("keeps {n} placeholders in sync between locales", () => {
@@ -50,7 +56,10 @@ describe("bundles", () => {
 
   it("references only keys that exist in the bundles", () => {
     const keys = new Set(Object.keys(bundleEn));
-    const patterns = [/(?:^|[^\w$])t\(\s*"((?:[^"\\]|\\.)*)"/g, /labelKey:\s*"((?:[^"\\]|\\.)*)"/g];
+    const patterns = [
+      /(?:^|[^\w$])t\(\s*"((?:[^"\\]|\\.)*)"/g,
+      /labelKey:\s*"((?:[^"\\]|\\.)*)"/g,
+    ];
     const missing: string[] = [];
     for (const [file, code] of Object.entries(sourceModules)) {
       for (const pattern of patterns) {
@@ -69,7 +78,8 @@ describe("bundles", () => {
     const missing: string[] = [];
     for (const [name, code] of Object.entries(ERROR_CODES)) {
       if (!(code in bundleEn)) missing.push(`en missing: ${name} -> "${code}"`);
-      if (!(code in bundleZhCn)) missing.push(`zh-cn missing: ${name} -> "${code}"`);
+      if (!(code in bundleZhCn))
+        missing.push(`zh-cn missing: ${name} -> "${code}"`);
     }
     expect(missing).toEqual([]);
   });

@@ -17,7 +17,10 @@ function escapeHtml(text: string): string {
  * follows an astral character (an emoji in a file name). Everything except the <mark> tags is
  * escaped, so repo/file names cannot inject scripts.
  */
-export function buildHighlighted(target: string, ranges: Array<[number, number]>): string {
+export function buildHighlighted(
+  target: string,
+  ranges: Array<[number, number]>,
+): string {
   const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
 
   let highlighted = "";
@@ -26,7 +29,10 @@ export function buildHighlighted(target: string, ranges: Array<[number, number]>
     const s = Math.max(sRaw, pos);
     if (eRaw < pos) continue;
     highlighted +=
-      escapeHtml(target.slice(pos, s)) + "<mark>" + escapeHtml(target.slice(s, eRaw + 1)) + "</mark>";
+      escapeHtml(target.slice(pos, s)) +
+      "<mark>" +
+      escapeHtml(target.slice(s, eRaw + 1)) +
+      "</mark>";
     pos = eRaw + 1;
   }
   highlighted += escapeHtml(target.slice(pos));

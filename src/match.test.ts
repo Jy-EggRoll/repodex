@@ -40,8 +40,12 @@ describe("canMaybeMatch soundness", () => {
 
 describe("matchRanges", () => {
   it("returns exactly the ranges the library produces", () => {
-    expect(matchRanges("README.md", "read")).toEqual(tseSearch("README.md", "read"));
-    expect(matchRanges("owner/some-repo", "some")).toEqual(tseSearch("owner/some-repo", "some"));
+    expect(matchRanges("README.md", "read")).toEqual(
+      tseSearch("README.md", "read"),
+    );
+    expect(matchRanges("owner/some-repo", "some")).toEqual(
+      tseSearch("owner/some-repo", "some"),
+    );
   });
 
   it("returns null for empty queries, empty targets and non-matches", () => {

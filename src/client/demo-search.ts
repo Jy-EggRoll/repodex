@@ -57,14 +57,26 @@ function demoKv(): Map<string, string> {
     const branches = repo.branches.map((branch) => ({
       branch: branch.branch_name,
       items: [
-        ...branch.files.map((f): ChunkItem => ({ type: "file", path: f.path, size: f.size })),
-        ...branch.directories.map((d): ChunkItem => ({ type: "directory", path: d.path })),
+        ...branch.files.map((f): ChunkItem => ({
+          type: "file",
+          path: f.path,
+          size: f.size,
+        })),
+        ...branch.directories.map((d): ChunkItem => ({
+          type: "directory",
+          path: d.path,
+        })),
       ],
     }));
     for (const segment of chunkBranchItems(branches)) {
       const k = `${repo.repository}@${index}`;
       map.set(k, JSON.stringify(encodeChunk(segment.items)));
-      chunks.push({ k, r: repo.repository, b: segment.branch, n: segment.items.length });
+      chunks.push({
+        k,
+        r: repo.repository,
+        b: segment.branch,
+        n: segment.items.length,
+      });
       index += 1;
       total += segment.items.length;
     }
@@ -102,7 +114,10 @@ export function listRepos(): RepoInfo[] {
 
 /** Same translation the fetch path applies to a failed response body (see `translateError` in api.ts). */
 function errorMessage(outcome: Outcome): string {
-  return translateError(JSON.parse(outcome.json) as { error?: string }, outcome.status);
+  return translateError(
+    JSON.parse(outcome.json) as { error?: string },
+    outcome.status,
+  );
 }
 
 /** Search via the production pipeline; failures keep production's codes (400/404/503) and translated text. */
@@ -120,11 +135,15 @@ export async function searchIndexes(
     limit: String(limit),
     offset: String(offset),
   });
-  if (outcome.status !== 200) throw new ApiError(outcome.status, errorMessage(outcome));
+  if (outcome.status !== 200)
+    throw new ApiError(outcome.status, errorMessage(outcome));
   const body = JSON.parse(outcome.json) as SearchResponse;
 
   // Thin adaptation, not logic: the pipeline derives `github.com/{repository}/{tree|blob}/...` links,
   // which for this fictional corpus would point at repositories that do not exist. Every result links
   // the demo repository instead, like `listRepos`'s html_url.
-  return { ...body, results: body.results.map((r) => ({ ...r, github_url: DEMO_GITHUB })) };
+  return {
+    ...body,
+    results: body.results.map((r) => ({ ...r, github_url: DEMO_GITHUB })),
+  };
 }

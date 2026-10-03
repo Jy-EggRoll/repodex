@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { compareRank, rankKeyFromRanges, recencyBoost, type RankKey } from "./rank";
+import {
+  compareRank,
+  rankKeyFromRanges,
+  recencyBoost,
+  type RankKey,
+} from "./rank";
 
 // Measured data (query=readme): the top four used to tie and fall back to insertion order; now this order is required
 const measured: Array<[string, Array<[number, number]>]> = [
@@ -11,7 +16,9 @@ const measured: Array<[string, Array<[number, number]>]> = [
 
 describe("compareRank", () => {
   it("sorts short and precise matches first", () => {
-    const keys = measured.map(([t, r]) => rankKeyFromRanges(r, t.length) as RankKey);
+    const keys = measured.map(
+      ([t, r]) => rankKeyFromRanges(r, t.length) as RankKey,
+    );
     const sorted = [...keys].sort(compareRank);
     expect(sorted.map((k) => k.targetLen)).toEqual([9, 14, 20, 32]);
   });

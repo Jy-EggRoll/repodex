@@ -39,23 +39,31 @@ export function stripDotSlash(p: string | null | undefined): string {
 /** Compact chunk payload: [[t, path, size], ...] with t=0 file / t=1 directory; directories omit size. */
 export function encodeChunk(items: readonly ChunkItem[]): ChunkEntry[] {
   return items.map((item) =>
-    item.type === "directory" ? [1, stripDotSlash(item.path)] : [0, stripDotSlash(item.path), item.size ?? 0],
+    item.type === "directory"
+      ? [1, stripDotSlash(item.path)]
+      : [0, stripDotSlash(item.path), item.size ?? 0],
   );
 }
 
 /** One branch's items sliced at the item cap, in order; an empty branch yields no slices. */
-export function chunkItems(items: readonly ChunkItem[] | null | undefined): ChunkItem[][] {
+export function chunkItems(
+  items: readonly ChunkItem[] | null | undefined,
+): ChunkItem[][] {
   const source = items ?? [];
   const slices: ChunkItem[][] = [];
-  for (let i = 0; i < source.length; i += CHUNK_ITEMS) slices.push(source.slice(i, i + CHUNK_ITEMS));
+  for (let i = 0; i < source.length; i += CHUNK_ITEMS)
+    slices.push(source.slice(i, i + CHUNK_ITEMS));
   return slices;
 }
 
 /** Flatten branches into chunk-sized `{ branch, items }` segments, preserving branch order and labels. */
-export function chunkBranchItems(branches: readonly BranchItems[] | null | undefined): ChunkSegment[] {
+export function chunkBranchItems(
+  branches: readonly BranchItems[] | null | undefined,
+): ChunkSegment[] {
   const segments: ChunkSegment[] = [];
   for (const branch of branches ?? []) {
-    for (const items of chunkItems(branch.items)) segments.push({ branch: branch.branch, items });
+    for (const items of chunkItems(branch.items))
+      segments.push({ branch: branch.branch, items });
   }
   return segments;
 }

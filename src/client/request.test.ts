@@ -44,7 +44,10 @@ describe("requestFailure", () => {
   });
 
   it("reports a status-less failure for anything else", () => {
-    expect(requestFailure(new Error("boom"))).toEqual({ status: null, message: "boom" });
+    expect(requestFailure(new Error("boom"))).toEqual({
+      status: null,
+      message: "boom",
+    });
     expect(requestFailure("boom")).toEqual({ status: null, message: "boom" });
   });
 });

@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Tabs, Button, DropdownMenu } from "@cloudflare/kumo";
-import { SunIcon, MoonIcon, DesktopIcon, GithubLogoIcon, TranslateIcon } from "@phosphor-icons/react";
+import {
+  SunIcon,
+  MoonIcon,
+  DesktopIcon,
+  GithubLogoIcon,
+  TranslateIcon,
+} from "@phosphor-icons/react";
 import RepoList from "./components/RepoList";
 import Search from "./components/Search";
-import { loadSetting, applyTheme, subscribeSystem, type ThemeSetting } from "./theme";
+import {
+  loadSetting,
+  applyTheme,
+  subscribeSystem,
+  type ThemeSetting,
+} from "./theme";
 import i18n, {
   applyLanguage,
   loadLanguageSetting,
@@ -12,10 +23,19 @@ import i18n, {
   type LanguageSetting,
   type Locale,
 } from "./i18n";
-import { CONTENT_MAX_W, SHELL_PADDING, PANEL, HEADER_SHADOW, CONTENT_SHADOW } from "./ui";
+import {
+  CONTENT_MAX_W,
+  SHELL_PADDING,
+  PANEL,
+  HEADER_SHADOW,
+  CONTENT_SHADOW,
+} from "./ui";
 import { DEMO } from "./api";
 
-const THEME_META: Record<ThemeSetting, { icon: typeof SunIcon; labelKey: string }> = {
+const THEME_META: Record<
+  ThemeSetting,
+  { icon: typeof SunIcon; labelKey: string }
+> = {
   auto: { icon: DesktopIcon, labelKey: "Follow system" },
   light: { icon: SunIcon, labelKey: "Light" },
   dark: { icon: MoonIcon, labelKey: "Dark" },
@@ -23,7 +43,10 @@ const THEME_META: Record<ThemeSetting, { icon: typeof SunIcon; labelKey: string 
 
 const LANGUAGE_OPTIONS: LanguageSetting[] = ["auto", "en", "zh-cn"];
 // Language endonyms stay literal; only "Follow system" is translated.
-const LANGUAGE_ENDONYM: Record<Locale, string> = { en: "English", "zh-cn": "简体中文" };
+const LANGUAGE_ENDONYM: Record<Locale, string> = {
+  en: "English",
+  "zh-cn": "简体中文",
+};
 
 function languageLabel(value: LanguageSetting, followSystem: string): string {
   return value === "auto" ? followSystem : LANGUAGE_ENDONYM[value];
@@ -42,7 +65,11 @@ function ThemeMenuItem({
   const { icon: Icon, labelKey } = THEME_META[value];
   // Pass the component reference (not an <Icon /> element); only then does Kumo inject mr-2 h-4 w-4 to space the icon from the text
   return (
-    <DropdownMenu.Item icon={Icon} selected={value === current} onClick={() => onSelect(value)}>
+    <DropdownMenu.Item
+      icon={Icon}
+      selected={value === current}
+      onClick={() => onSelect(value)}
+    >
       {t(labelKey)}
     </DropdownMenu.Item>
   );
@@ -59,7 +86,11 @@ function LanguageMenuItem({
 }) {
   const { t } = useTranslation();
   return (
-    <DropdownMenu.Item icon={TranslateIcon} selected={value === current} onClick={() => onSelect(value)}>
+    <DropdownMenu.Item
+      icon={TranslateIcon}
+      selected={value === current}
+      onClick={() => onSelect(value)}
+    >
       {languageLabel(value, t("Follow system"))}
     </DropdownMenu.Item>
   );
@@ -102,7 +133,9 @@ export default function App() {
     <div className="min-h-screen bg-kumo-tint text-kumo-default antialiased">
       {DEMO && (
         <div className="bg-kumo-info-tint px-4 py-2 text-center text-sm text-kumo-strong">
-          {t("Demo mode: data is fictional, search logic matches the production version")}
+          {t(
+            "Demo mode: data is fictional, search logic matches the production version",
+          )}
         </div>
       )}
       <div className={`mx-auto ${CONTENT_MAX_W}`}>
@@ -124,7 +157,11 @@ export default function App() {
               title={t("GitHub repository")}
               icon={<GithubLogoIcon />}
               onClick={() =>
-                window.open("https://github.com/Jy-EggRoll/repodex", "_blank", "noopener,noreferrer")
+                window.open(
+                  "https://github.com/Jy-EggRoll/repodex",
+                  "_blank",
+                  "noopener,noreferrer",
+                )
               }
             />
           </div>
@@ -147,7 +184,9 @@ export default function App() {
                     {...p}
                     variant="ghost"
                     shape="square"
-                    aria-label={t("Switch language (current: {0})", { 0: langLabel })}
+                    aria-label={t("Switch language (current: {0})", {
+                      0: langLabel,
+                    })}
                     title={langLabel}
                     icon={<TranslateIcon />}
                   />
@@ -155,7 +194,12 @@ export default function App() {
               />
               <DropdownMenu.Content className="theme-menu-pop">
                 {LANGUAGE_OPTIONS.map((v) => (
-                  <LanguageMenuItem key={v} value={v} current={lang} onSelect={selectLanguage} />
+                  <LanguageMenuItem
+                    key={v}
+                    value={v}
+                    current={lang}
+                    onSelect={selectLanguage}
+                  />
                 ))}
               </DropdownMenu.Content>
             </DropdownMenu>
@@ -166,10 +210,15 @@ export default function App() {
                     {...p}
                     variant="ghost"
                     shape="square"
-                    aria-label={t("Switch theme (current: {0})", { 0: themeLabel })}
+                    aria-label={t("Switch theme (current: {0})", {
+                      0: themeLabel,
+                    })}
                     title={themeLabel}
                     icon={
-                      <span key={setting} className="theme-icon-swap flex items-center">
+                      <span
+                        key={setting}
+                        className="theme-icon-swap flex items-center"
+                      >
                         <ThemeIcon />
                       </span>
                     }
@@ -178,7 +227,12 @@ export default function App() {
               />
               <DropdownMenu.Content className="theme-menu-pop">
                 {(Object.keys(THEME_META) as ThemeSetting[]).map((v) => (
-                  <ThemeMenuItem key={v} value={v} current={setting} onSelect={selectTheme} />
+                  <ThemeMenuItem
+                    key={v}
+                    value={v}
+                    current={setting}
+                    onSelect={selectTheme}
+                  />
                 ))}
               </DropdownMenu.Content>
             </DropdownMenu>

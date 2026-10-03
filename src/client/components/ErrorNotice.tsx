@@ -9,14 +9,24 @@ interface ErrorNoticeProps {
   retryDisabled?: boolean;
 }
 
-export default function ErrorNotice({ title, message, onRetry, retryDisabled }: ErrorNoticeProps) {
+export default function ErrorNotice({
+  title,
+  message,
+  onRetry,
+  retryDisabled,
+}: ErrorNoticeProps) {
   const { t } = useTranslation();
   return (
     <div className="mt-4">
       <Banner variant="error" title={title} description={message} />
       {onRetry && (
         <div className="mt-2">
-          <Button variant="secondary" size="sm" disabled={retryDisabled} onClick={onRetry}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={retryDisabled}
+            onClick={onRetry}
+          >
             {t("Retry")}
           </Button>
         </div>

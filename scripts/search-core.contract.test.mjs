@@ -20,12 +20,35 @@ describe("generate_index -> search-core contract", () => {
       buildBranchItems("main", TREE),
     ];
     const { chunks, repo } = buildChunkWrites({ fullName: "o/r" }, branches);
-    const decoded = chunks.flatMap((c) => decodeChunk(JSON.stringify(c.value), "o/r", c.branch));
+    const decoded = chunks.flatMap((c) =>
+      decodeChunk(JSON.stringify(c.value), "o/r", c.branch),
+    );
 
     expect(decoded).toEqual([
-      { name: "说明.md", repository: "o/r", branch: "dev", path: "说明.md", size: 0, type: "file" },
-      { name: "a.ts", repository: "o/r", branch: "main", path: "src/a.ts", size: 120, type: "file" },
-      { name: "README.md", repository: "o/r", branch: "main", path: "README.md", size: 40, type: "file" },
+      {
+        name: "说明.md",
+        repository: "o/r",
+        branch: "dev",
+        path: "说明.md",
+        size: 0,
+        type: "file",
+      },
+      {
+        name: "a.ts",
+        repository: "o/r",
+        branch: "main",
+        path: "src/a.ts",
+        size: 120,
+        type: "file",
+      },
+      {
+        name: "README.md",
+        repository: "o/r",
+        branch: "main",
+        path: "README.md",
+        size: 40,
+        type: "file",
+      },
       {
         name: "logo.png",
         repository: "o/r",
@@ -34,7 +57,14 @@ describe("generate_index -> search-core contract", () => {
         size: 9000,
         type: "file",
       },
-      { name: "src", repository: "o/r", branch: "main", path: "src", size: undefined, type: "directory" },
+      {
+        name: "src",
+        repository: "o/r",
+        branch: "main",
+        path: "src",
+        size: undefined,
+        type: "directory",
+      },
       {
         name: "assets",
         repository: "o/r",
@@ -51,10 +81,19 @@ describe("generate_index -> search-core contract", () => {
   it("directory tuples derive the name and keep size undefined", () => {
     const branches = [buildBranchItems("main", TREE)];
     const { chunks } = buildChunkWrites({ fullName: "o/r" }, branches);
-    const decoded = chunks.flatMap((c) => decodeChunk(JSON.stringify(c.value), "o/r", c.branch));
+    const decoded = chunks.flatMap((c) =>
+      decodeChunk(JSON.stringify(c.value), "o/r", c.branch),
+    );
 
     expect(decoded.filter((e) => e.type === "directory")).toEqual([
-      { name: "src", repository: "o/r", branch: "main", path: "src", size: undefined, type: "directory" },
+      {
+        name: "src",
+        repository: "o/r",
+        branch: "main",
+        path: "src",
+        size: undefined,
+        type: "directory",
+      },
       {
         name: "assets",
         repository: "o/r",

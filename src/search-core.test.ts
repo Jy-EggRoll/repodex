@@ -84,14 +84,20 @@ function planOf(
 }
 
 function kvFrom(entries: Record<string, unknown>): KvGet {
-  const map = new Map<string, string>(Object.entries(entries).map(([k, v]) => [k, JSON.stringify(v)]));
+  const map = new Map<string, string>(
+    Object.entries(entries).map(([k, v]) => [k, JSON.stringify(v)]),
+  );
   return async (k) => map.get(k) ?? null;
 }
 
 function world(
   specs: RepoSpec[],
   chunkSize = 2,
-  opts: { dropChunk?: string; corruptChunk?: string; extra?: Record<string, unknown> } = {},
+  opts: {
+    dropChunk?: string;
+    corruptChunk?: string;
+    extra?: Record<string, unknown>;
+  } = {},
 ): KvGet {
   const { plan, chunkEntries } = planOf(specs, chunkSize);
   const entries: Record<string, unknown> = { [PLAN_KEY]: plan };
@@ -104,7 +110,14 @@ function world(
 }
 
 async function run(get: KvGet, params: Partial<SearchSpec>) {
-  const out = await runSearch(get, { q: "", file: "", mode: "", limit: "", offset: "", ...params });
+  const out = await runSearch(get, {
+    q: "",
+    file: "",
+    mode: "",
+    limit: "",
+    offset: "",
+    ...params,
+  });
   return { status: out.status, body: JSON.parse(out.json) };
 }
 
@@ -130,9 +143,15 @@ describe("parsePlan", () => {
   it("rejects plans that are not v2/v3", () => {
     expect(parsePlan(null)).toBeNull();
     expect(parsePlan("not json")).toBeNull();
-    expect(parsePlan(JSON.stringify({ v: 1, chunks: [], repos: [] }))).toBeNull();
-    expect(parsePlan(JSON.stringify({ v: 4, chunks: [], repos: [] }))).toBeNull();
-    expect(parsePlan(JSON.stringify({ v: 2, chunks: {}, repos: [] }))).toBeNull();
+    expect(
+      parsePlan(JSON.stringify({ v: 1, chunks: [], repos: [] })),
+    ).toBeNull();
+    expect(
+      parsePlan(JSON.stringify({ v: 4, chunks: [], repos: [] })),
+    ).toBeNull();
+    expect(
+      parsePlan(JSON.stringify({ v: 2, chunks: {}, repos: [] })),
+    ).toBeNull();
   });
 
   it("keeps valid entries and drops malformed ones", () => {
@@ -161,12 +180,19 @@ describe("parsePlan", () => {
       }),
     );
     expect(ok?.v).toBe(2);
-    expect(ok?.chunks[0]).toMatchObject({ k: "a-index@0", r: "o/a", b: "main", n: 3 });
+    expect(ok?.chunks[0]).toMatchObject({
+      k: "a-index@0",
+      r: "o/a",
+      b: "main",
+      n: 3,
+    });
     expect(ok?.repos[0]).toMatchObject({ r: "o/a", n: 3 });
   });
 
   it("passes the optional recency timestamp through untouched", () => {
-    const ok = parsePlan(JSON.stringify({ v: 3, chunks: [], repos: [{ r: "o/a", n: 1, t: 42 }] }));
+    const ok = parsePlan(
+      JSON.stringify({ v: 3, chunks: [], repos: [{ r: "o/a", n: 1, t: 42 }] }),
+    );
     expect(ok?.repos).toEqual([{ r: "o/a", n: 1, t: 42 }]);
   });
 });
@@ -183,15 +209,40 @@ describe("decodeChunk", () => {
       "main",
     );
     expect(entries).toEqual([
-      { name: "a.txt", repository: "o/r", branch: "main", path: "a.txt", size: 5, type: "file" },
-      { name: "dir", repository: "o/r", branch: "main", path: "dir", size: undefined, type: "directory" },
-      { name: "b.txt", repository: "o/r", branch: "main", path: "b.txt", size: undefined, type: "file" },
+      {
+        name: "a.txt",
+        repository: "o/r",
+        branch: "main",
+        path: "a.txt",
+        size: 5,
+        type: "file",
+      },
+      {
+        name: "dir",
+        repository: "o/r",
+        branch: "main",
+        path: "dir",
+        size: undefined,
+        type: "directory",
+      },
+      {
+        name: "b.txt",
+        repository: "o/r",
+        branch: "main",
+        path: "b.txt",
+        size: undefined,
+        type: "file",
+      },
     ]);
   });
 
   it("throws on malformed payloads so callers can count a load failure", () => {
-    expect(() => decodeChunk(JSON.stringify({ nope: true }), "o/r", "main")).toThrow();
-    expect(() => decodeChunk(JSON.stringify([[7, "x"]]), "o/r", "main")).toThrow();
+    expect(() =>
+      decodeChunk(JSON.stringify({ nope: true }), "o/r", "main"),
+    ).toThrow();
+    expect(() =>
+      decodeChunk(JSON.stringify([[7, "x"]]), "o/r", "main"),
+    ).toThrow();
   });
 });
 
@@ -205,7 +256,10 @@ describe("resolveSelection", () => {
     expect(resolveSelection("ALL", plan)).toEqual({ kind: "invalid" });
     expect(resolveSelection("a/b/c", plan)).toEqual({ kind: "invalid" });
     expect(resolveSelection("no-slash", plan)).toEqual({ kind: "invalid" });
-    expect(resolveSelection("a/b,c", plan)).toEqual({ kind: "list", names: ["a/b"] });
+    expect(resolveSelection("a/b,c", plan)).toEqual({
+      kind: "list",
+      names: ["a/b"],
+    });
   });
 
   it("resolves plan-known single names to their chunks and dedupes list names", () => {
@@ -215,7 +269,9 @@ describe("resolveSelection", () => {
       expect(single.known).toBe(true);
       expect(single.chunks.length).toBeGreaterThan(0);
     }
-    expect(resolveSelection("owner/alpha,owner/alpha , owner/alpha", plan)).toEqual({
+    expect(
+      resolveSelection("owner/alpha,owner/alpha , owner/alpha", plan),
+    ).toEqual({
       kind: "list",
       names: ["owner/alpha"],
     });
@@ -236,10 +292,18 @@ describe("runSearch validation and selection", () => {
   });
 
   it("a missing plan reports index-not-ready (503) before any file validation", async () => {
-    for (const file of ["", "all", "owner/alpha", "owner/alpha,owner/beta", "no-slash"]) {
+    for (const file of [
+      "",
+      "all",
+      "owner/alpha",
+      "owner/alpha,owner/beta",
+      "no-slash",
+    ]) {
       const res = await run(kvFrom({}), { q: "x", file });
       expect(res.status, `file=${file}`).toBe(503);
-      expect(res.body).toEqual({ error: "index not ready, run Central Repository Index workflow first" });
+      expect(res.body).toEqual({
+        error: "index not ready, run Central Repository Index workflow first",
+      });
     }
   });
 
@@ -283,10 +347,16 @@ describe("runSearch validation and selection", () => {
       file: "owner/alpha,bad/name,no-slash,owner/missing,owner/beta",
     });
     expect(res.status).toBe(200);
-    const both = await run(get, { q: "readme", file: "owner/alpha,owner/beta" });
+    const both = await run(get, {
+      q: "readme",
+      file: "owner/alpha,owner/beta",
+    });
     expect(withoutTimings(res.body)).toEqual(withoutTimings(both.body));
 
-    const unknownOnly = await run(get, { q: "readme", file: "owner/missing,owner/nope" });
+    const unknownOnly = await run(get, {
+      q: "readme",
+      file: "owner/missing,owner/nope",
+    });
     expect(unknownOnly.status).toBe(200);
     expect(unknownOnly.body.total).toBe(0);
   });
@@ -312,10 +382,15 @@ describe("migration window", () => {
   it("a v2 plan (short-name chunk keys) is served with full-name selection", async () => {
     const v2plan = {
       v: 2,
-      chunks: [{ k: "alpha-index@0", r: "owner/alpha", rs: "alpha", b: "main", n: 1 }],
+      chunks: [
+        { k: "alpha-index@0", r: "owner/alpha", rs: "alpha", b: "main", n: 1 },
+      ],
       repos: [{ r: "owner/alpha", rs: "alpha", n: 1 }],
     };
-    const get = kvFrom({ [PLAN_KEY]: v2plan, "alpha-index@0": [[0, "README.md", 1]] });
+    const get = kvFrom({
+      [PLAN_KEY]: v2plan,
+      "alpha-index@0": [[0, "README.md", 1]],
+    });
     const res = await run(get, { q: "readme", file: "owner/alpha" });
     expect(res.status).toBe(200);
     expect(res.body.total).toBe(1);
@@ -341,13 +416,22 @@ describe("repo-level recency", () => {
 
   it("a freshly pushed repository floats above an otherwise equal stale one", async () => {
     const res = await run(world(FRESH_STALE), { q: "notes.txt" });
-    expect(res.body.results.map((r: any) => r.repository)).toEqual(["owner/new", "owner/old"]);
+    expect(res.body.results.map((r: any) => r.repository)).toEqual([
+      "owner/new",
+      "owner/old",
+    ]);
   });
 
   it("plans without timestamps keep the scan order (boost is neutral)", async () => {
-    const stripped = FRESH_STALE.map((s) => ({ full: s.full, branches: s.branches }));
+    const stripped = FRESH_STALE.map((s) => ({
+      full: s.full,
+      branches: s.branches,
+    }));
     const res = await run(world(stripped), { q: "notes.txt" });
-    expect(res.body.results.map((r: any) => r.repository)).toEqual(["owner/old", "owner/new"]);
+    expect(res.body.results.map((r: any) => r.repository)).toEqual([
+      "owner/old",
+      "owner/new",
+    ]);
   });
 });
 
@@ -368,12 +452,16 @@ describe("runSearch result shape", () => {
       "github_url",
       "highlightedPath",
     ]);
-    expect(file.github_url).toBe("https://github.com/owner/alpha/blob/main/src/deep/module.ts");
+    expect(file.github_url).toBe(
+      "https://github.com/owner/alpha/blob/main/src/deep/module.ts",
+    );
     expect(file.size_mb).toBe(0);
 
     expect(dir.path).toBe("src/deep");
     expect("size" in dir).toBe(false);
-    expect(dir.github_url).toBe("https://github.com/owner/alpha/tree/main/src/deep");
+    expect(dir.github_url).toBe(
+      "https://github.com/owner/alpha/tree/main/src/deep",
+    );
   });
 
   it("mode=name highlights names only and vice versa", async () => {
@@ -393,7 +481,8 @@ describe("runSearch telemetry and failures", () => {
   it("exactly SCORE_CAP matches mark the total as truncated", async () => {
     const files = Array.from(
       { length: 1000 },
-      (_, i) => [`match-${String(i).padStart(4, "0")}.txt`, 1] as [string, number],
+      (_, i) =>
+        [`match-${String(i).padStart(4, "0")}.txt`, 1] as [string, number],
     );
     const spec = { full: "o/many", branches: { main: { files, dirs: [] } } };
     const res = await run(world([spec], 300), { q: "match" });
@@ -402,7 +491,10 @@ describe("runSearch telemetry and failures", () => {
   });
 
   it("just below the cap is not truncated", async () => {
-    const files = Array.from({ length: 999 }, (_, i) => [`match-${i}.txt`, 1] as [string, number]);
+    const files = Array.from(
+      { length: 999 },
+      (_, i) => [`match-${i}.txt`, 1] as [string, number],
+    );
     const spec = { full: "o/many", branches: { main: { files, dirs: [] } } };
     const res = await run(world([spec], 300), { q: "match" });
     expect(res.body.total).toBe(999);
@@ -410,7 +502,10 @@ describe("runSearch telemetry and failures", () => {
   });
 
   it("a cap stop still reports the full corpus from the plan (load-everything parity)", async () => {
-    const files = Array.from({ length: 2400 }, (_, i) => [`match-${i}.txt`, 1] as [string, number]);
+    const files = Array.from(
+      { length: 2400 },
+      (_, i) => [`match-${i}.txt`, 1] as [string, number],
+    );
     const spec = { full: "o/many", branches: { main: { files, dirs: [] } } };
     const res = await run(world([spec], 100), { q: "match" });
     expect(res.body.truncated).toBe(true);
@@ -420,7 +515,10 @@ describe("runSearch telemetry and failures", () => {
   });
 
   it("an offset at or past the score cap returns an empty 200 page against a capped total", async () => {
-    const files = Array.from({ length: 1200 }, (_, i) => [`match-${i}.txt`, 1] as [string, number]);
+    const files = Array.from(
+      { length: 1200 },
+      (_, i) => [`match-${i}.txt`, 1] as [string, number],
+    );
     const spec = { full: "o/many", branches: { main: { files, dirs: [] } } };
     const get = world([spec], 300);
     for (const offset of ["1000", "5000"]) {
@@ -446,7 +544,9 @@ describe("runSearch telemetry and failures", () => {
         },
       },
     };
-    const res = await run(world([spec], 1, { dropChunk: "o/x@1" }), { q: "txt" });
+    const res = await run(world([spec], 1, { dropChunk: "o/x@1" }), {
+      q: "txt",
+    });
     expect(res.status).toBe(200);
     expect(res.body.loadFailCount).toBe(1);
     expect(res.body.itemsTotal).toBe(2);
@@ -467,7 +567,9 @@ describe("runSearch telemetry and failures", () => {
         },
       },
     };
-    const res = await run(world([spec], 1, { corruptChunk: "o/x@1" }), { q: "txt" });
+    const res = await run(world([spec], 1, { corruptChunk: "o/x@1" }), {
+      q: "txt",
+    });
     expect(res.status).toBe(200);
     expect(res.body.loadFailCount).toBe(1);
     expect(res.body.itemsTotal).toBe(2);
@@ -484,7 +586,18 @@ describe("prefilter never hides real matches", () => {
         paths.push(...b.files.map(([p]) => p), ...b.dirs);
       }
     }
-    const queries = ["e", "READ", "zzz", "说明", "sm", "a b", "文档", "全角", "🚀", "t.s"];
+    const queries = [
+      "e",
+      "READ",
+      "zzz",
+      "说明",
+      "sm",
+      "a b",
+      "文档",
+      "全角",
+      "🚀",
+      "t.s",
+    ];
     for (const q of queries) {
       const reference = paths.filter((p) => tseSearch(p, q)).sort();
       const res = await run(world(CORPUS), { q, limit: "1000" });

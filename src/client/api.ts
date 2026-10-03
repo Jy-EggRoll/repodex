@@ -9,13 +9,18 @@ export const DEMO = import.meta.env.VITE_DEMO === "1";
  * Translate a failed response body's error code, falling back to a generic status message. Single
  * source for both the fetch path below and the demo pipeline (src/client/demo-search.ts).
  */
-export function translateError(body: { error?: string } | null, status: number): string {
+export function translateError(
+  body: { error?: string } | null,
+  status: number,
+): string {
   return body?.error ? t(body.error) : t("Request failed ({0})", { 0: status });
 }
 
 /** Read the server error code (if any) and translate it; falls back to a generic message. */
 async function errorMessage(res: Response): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { error?: string } | null;
+  const body = (await res.json().catch(() => null)) as {
+    error?: string;
+  } | null;
   return translateError(body, res.status);
 }
 
@@ -61,7 +66,9 @@ export interface SearchPerf extends SearchResponse {
 
 /** Turn the selected indexes into the `file` query param: no selection or full selection both mean "all". */
 export function buildFileParam(checked: string[], total: number): string {
-  return checked.length > 0 && checked.length !== total ? checked.join(",") : "all";
+  return checked.length > 0 && checked.length !== total
+    ? checked.join(",")
+    : "all";
 }
 
 export async function searchFiles(
@@ -71,7 +78,14 @@ export async function searchFiles(
   limit = PAGE_SIZE,
   offset = 0,
 ): Promise<SearchResponse> {
-  if (DEMO) return (await import("./demo-search")).searchIndexes(q, fileParam, mode, limit, offset);
+  if (DEMO)
+    return (await import("./demo-search")).searchIndexes(
+      q,
+      fileParam,
+      mode,
+      limit,
+      offset,
+    );
   const res = await fetch(
     `/api/search?q=${encodeURIComponent(q)}&file=${encodeURIComponent(fileParam)}&mode=${mode}&limit=${limit}&offset=${offset}`,
   );

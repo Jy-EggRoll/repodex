@@ -1,10 +1,19 @@
-import { useEffect, useRef, useState, type AnimationEvent, type CSSProperties } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type AnimationEvent,
+  type CSSProperties,
+} from "react";
 
 /** Enter/exit animation duration; keep in sync with --motion-fade in main.css. */
 const EXIT_MS = 200;
 
 /** Keys present in `previous` but missing from `next`, in previous order. */
-export function leavingKeys(previous: string[], next: Iterable<string>): string[] {
+export function leavingKeys(
+  previous: string[],
+  next: Iterable<string>,
+): string[] {
   const nextSet = new Set(next);
   return previous.filter((key) => !nextSet.has(key));
 }
@@ -31,7 +40,9 @@ export function useListTransition<T>(
 
   useEffect(() => {
     if (!leavingSig) {
-      setCommitted((prev) => (prev === itemsRef.current ? prev : itemsRef.current));
+      setCommitted((prev) =>
+        prev === itemsRef.current ? prev : itemsRef.current,
+      );
       return;
     }
     const timer = setTimeout(() => setCommitted(itemsRef.current), exitMs);
@@ -60,7 +71,10 @@ export function useEnterOnce(delayMs?: number) {
  * false it stays mounted for one exit animation while reporting `leaving`; turning it back on
  * cancels the exit.
  */
-export function useDelayedPresence(show: boolean, exitMs = EXIT_MS): [present: boolean, leaving: boolean] {
+export function useDelayedPresence(
+  show: boolean,
+  exitMs = EXIT_MS,
+): [present: boolean, leaving: boolean] {
   const [mounted, setMounted] = useState(show);
   const leaving = mounted && !show;
 

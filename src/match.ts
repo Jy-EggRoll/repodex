@@ -27,13 +27,17 @@ export function canMaybeMatch(query: string, target: string): boolean {
   if (!isPlainAscii(query) || !isPlainAscii(target)) return true;
   let qi = 0;
   for (let ti = 0; ti < target.length && qi < query.length; ti++) {
-    if (foldLower(target.charCodeAt(ti)) === foldLower(query.charCodeAt(qi))) qi++;
+    if (foldLower(target.charCodeAt(ti)) === foldLower(query.charCodeAt(qi)))
+      qi++;
   }
   return qi === query.length;
 }
 
 /** Match `query` against `target`; null when either is empty or the library finds nothing. Matching failures are swallowed. */
-export function matchRanges(target: string, query: string): Array<[number, number]> | null {
+export function matchRanges(
+  target: string,
+  query: string,
+): Array<[number, number]> | null {
   const q = query.trim();
   if (!q || !target) return null;
   if (!canMaybeMatch(q, target)) return null;

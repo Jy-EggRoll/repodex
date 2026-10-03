@@ -44,8 +44,12 @@ export default function RepoList() {
       if (!titleRanges && !subtitleRanges) continue;
       out.push({
         repo,
-        titleHtml: titleRanges ? buildHighlighted(repo.full_name, titleRanges) : undefined,
-        subtitleHtml: subtitleRanges ? buildHighlighted(description, subtitleRanges) : undefined,
+        titleHtml: titleRanges
+          ? buildHighlighted(repo.full_name, titleRanges)
+          : undefined,
+        subtitleHtml: subtitleRanges
+          ? buildHighlighted(description, subtitleRanges)
+          : undefined,
       });
     }
     return out;

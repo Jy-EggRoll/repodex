@@ -25,7 +25,9 @@ describe("buildDemoCorpus", () => {
   });
 
   it("includes Chinese filenames (pinyin-searchable)", () => {
-    const names = buildDemoCorpus().flatMap((r) => r.branches.flatMap((b) => b.files.map((f) => f.name)));
+    const names = buildDemoCorpus().flatMap((r) =>
+      r.branches.flatMap((b) => b.files.map((f) => f.name)),
+    );
     expect(names.some((n) => /[\u4e00-\u9fa5]/.test(n))).toBe(true);
   });
 });

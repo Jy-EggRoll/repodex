@@ -45,7 +45,10 @@ export interface PagingState {
  * Whether the list on screen has reached its end, so no further page can add a result. A truncated
  * search reports the number of matches it scored as `total`, so this stops exactly at the cap.
  */
-export function resultsExhausted(results: SearchResult[] | null, total: number): boolean {
+export function resultsExhausted(
+  results: SearchResult[] | null,
+  total: number,
+): boolean {
   return results !== null && results.length >= total;
 }
 

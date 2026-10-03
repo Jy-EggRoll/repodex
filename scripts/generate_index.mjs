@@ -43,7 +43,8 @@ const FORMAT_VERSION = 3;
 const CHUNK_KEY_RE = /@\d+$/;
 
 // Terminal colors go to stderr only (console logs); stdout is reserved for clean markdown in the Summary
-const paint = (code) => (s) => (process.env.NO_COLOR === "1" ? s : `\x1b[${code}m${s}\x1b[0m`);
+const paint = (code) => (s) =>
+  process.env.NO_COLOR === "1" ? s : `\x1b[${code}m${s}\x1b[0m`;
 const green = paint(32);
 const gray = paint(90);
 const yellow = paint(33);
@@ -94,14 +95,21 @@ async function ghRequest(path, token, what = path) {
   for (;;) {
     const sep = path.includes("?") ? "&" : "?";
     const data = await withRetry(async () => {
-      const res = await fetch(`${GH_API}${path}${sep}per_page=100&page=${page}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
+      const res = await fetch(
+        `${GH_API}${path}${sep}per_page=100&page=${page}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
         },
-      });
-      if (!res.ok) throw new HttpError(res.status, `GitHub API failed: ${what} -> HTTP ${res.status}`);
+      );
+      if (!res.ok)
+        throw new HttpError(
+          res.status,
+          `GitHub API failed: ${what} -> HTTP ${res.status}`,
+        );
       return res.json();
     });
     if (!Array.isArray(data)) return data;
@@ -113,11 +121,15 @@ async function ghRequest(path, token, what = path) {
 
 async function cfKvGet(account, namespace, token, key) {
   const res = await withRetry(async () => {
-    const r = await fetch(`${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/values/${key}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const r = await fetch(
+      `${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/values/${key}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
     if (r.status === 404) return r;
-    if (!r.ok) throw new HttpError(r.status, `KV GET failed -> HTTP ${r.status}`);
+    if (!r.ok)
+      throw new HttpError(r.status, `KV GET failed -> HTTP ${r.status}`);
     return r;
   });
   if (res.status === 404) return null;
@@ -131,13 +143,18 @@ async function cfKvPut(account, namespace, token, key, value, dryRun) {
       `${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/values/${key}`,
       {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=utf-8" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json; charset=utf-8",
+        },
         body: JSON.stringify(value),
       },
     );
-    if (!res.ok) throw new HttpError(res.status, `KV PUT failed -> HTTP ${res.status}`);
+    if (!res.ok)
+      throw new HttpError(res.status, `KV PUT failed -> HTTP ${res.status}`);
     const result = await res.json();
-    if (result.success === false) throw new Error("KV PUT returned success=false");
+    if (result.success === false)
+      throw new Error("KV PUT returned success=false");
   });
 }
 
@@ -151,7 +168,8 @@ async function cfKvDelete(account, namespace, token, key, dryRun) {
         headers: { Authorization: `Bearer ${token}` },
       },
     );
-    if (!res.ok) throw new HttpError(res.status, `KV DELETE failed -> HTTP ${res.status}`);
+    if (!res.ok)
+      throw new HttpError(res.status, `KV DELETE failed -> HTTP ${res.status}`);
   });
 }
 
@@ -161,14 +179,20 @@ export async function cfKvList(account, namespace, token) {
   let cursor = "";
   for (;;) {
     const requestCursor = cursor;
-    const url = new URL(`${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/keys`);
+    const url = new URL(
+      `${CF_API}/accounts/${account}/storage/kv/namespaces/${namespace}/keys`,
+    );
     url.searchParams.set("limit", "1000");
     if (requestCursor) url.searchParams.set("cursor", requestCursor);
     const result = await withRetry(async () => {
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new HttpError(res.status, `KV LIST failed -> HTTP ${res.status}`);
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok)
+        throw new HttpError(res.status, `KV LIST failed -> HTTP ${res.status}`);
       const body = await res.json();
-      if (body.success === false) throw new Error("KV LIST returned success=false");
+      if (body.success === false)
+        throw new Error("KV LIST returned success=false");
       return body;
     });
     for (const k of result.result ?? []) keys.push(k.name);
@@ -213,8 +237,10 @@ export function buildBranchItems(branchName, entries) {
   for (const entry of entries) {
     const path = entry.path ?? "";
     if (!path) continue;
-    if (entry.type === "blob") items.push({ type: "file", path, size: entry.size ?? 0 });
-    else if (entry.type === "tree") directories.push({ type: "directory", path });
+    if (entry.type === "blob")
+      items.push({ type: "file", path, size: entry.size ?? 0 });
+    else if (entry.type === "tree")
+      directories.push({ type: "directory", path });
   }
   return { branch: branchName, items: [...items, ...directories] };
 }
@@ -259,7 +285,10 @@ export function computePruneList(existingKeys, planChunks) {
 
 /** Attach each repo's last push time (epoch ms) to its plan entry; readers rank recently pushed repos higher. */
 export function attachPushedAt(list, pushedAtByFull) {
-  return (list ?? []).map((rp) => ({ ...rp, t: pushedAtByFull.get(rp.r) ?? rp.t }));
+  return (list ?? []).map((rp) => ({
+    ...rp,
+    t: pushedAtByFull.get(rp.r) ?? rp.t,
+  }));
 }
 
 /** Repos to RepoInfo: same shape as the Worker's old getAllRepos output; no filtering (archived included). */
@@ -283,7 +312,12 @@ export function buildRepoInfo(repos) {
 }
 
 function isTreeData(data) {
-  return typeof data === "object" && data !== null && !Array.isArray(data) && Array.isArray(data.tree);
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    !Array.isArray(data) &&
+    Array.isArray(data.tree)
+  );
 }
 
 /**
@@ -292,7 +326,11 @@ function isTreeData(data) {
  * case walk the tree directory by directory and reassemble full paths.
  */
 async function fetchTree(fullName, sha, token) {
-  const data = await ghRequest(`/repos/${fullName}/git/trees/${sha}?recursive=1`, token, "git tree");
+  const data = await ghRequest(
+    `/repos/${fullName}/git/trees/${sha}?recursive=1`,
+    token,
+    "git tree",
+  );
   if (!isTreeData(data)) throw new Error("git tree response is not a tree");
   if (!data.truncated) return data.tree;
   return walkTree(fullName, sha, token);
@@ -304,11 +342,16 @@ async function walkTree(fullName, rootSha, token) {
   const stack = [{ sha: rootSha, prefix: "" }];
   while (stack.length) {
     const { sha, prefix } = stack.pop();
-    const data = await ghRequest(`/repos/${fullName}/git/trees/${sha}`, token, "git tree");
+    const data = await ghRequest(
+      `/repos/${fullName}/git/trees/${sha}`,
+      token,
+      "git tree",
+    );
     if (!isTreeData(data)) throw new Error("git tree node is not a tree");
     for (const entry of data.tree) {
       const path = prefix ? `${prefix}/${entry.path}` : entry.path;
-      if (entry.type === "blob") entries.push({ path, type: "blob", size: entry.size ?? 0 });
+      if (entry.type === "blob")
+        entries.push({ path, type: "blob", size: entry.size ?? 0 });
       else if (entry.type === "tree") {
         entries.push({ path, type: "tree" });
         stack.push({ sha: entry.sha, prefix: path });
@@ -338,13 +381,17 @@ async function main() {
 
   let blocklist = new Set();
   try {
-    blocklist = parseBlocklist(await readFile(join(repoRoot, "repos-blocklist.txt"), "utf-8"));
+    blocklist = parseBlocklist(
+      await readFile(join(repoRoot, "repos-blocklist.txt"), "utf-8"),
+    );
   } catch {
     // Missing file = empty blocklist
   }
 
-  const storedTable = (await cfKvGet(cfAccount, cfNamespace, cfToken, SHA_TABLE_KEY)) ?? {};
-  const shaTable = typeof storedTable === "object" && storedTable !== null ? storedTable : {};
+  const storedTable =
+    (await cfKvGet(cfAccount, cfNamespace, cfToken, SHA_TABLE_KEY)) ?? {};
+  const shaTable =
+    typeof storedTable === "object" && storedTable !== null ? storedTable : {};
   const formatOk = shaTable[FORMAT_KEY] === FORMAT_VERSION;
   const rawPlan = await cfKvGet(cfAccount, cfNamespace, cfToken, PLAN_KEY);
   const prevPlan =
@@ -357,13 +404,22 @@ async function main() {
       : null;
   // Repos the plan records as empty (n=0): they have no chunk to key off, so the plan itself marks them indexed
   const plannedEmpty = new Set(
-    (prevPlan?.repos ?? []).filter((rp) => rp && rp.n === 0 && rp.r).map((rp) => rp.r),
+    (prevPlan?.repos ?? [])
+      .filter((rp) => rp && rp.n === 0 && rp.r)
+      .map((rp) => rp.r),
   );
 
   // Log split: the tally goes to stderr (colored console), the report to stdout (clean markdown for the Summary); output never contains repo names
   const say = (s) => console.error(s);
   const startedAt = Date.now();
-  const counts = { total: 0, updated: 0, skipped: 0, warned: 0, pruned: 0, chunks: 0 };
+  const counts = {
+    total: 0,
+    updated: 0,
+    skipped: 0,
+    warned: 0,
+    pruned: 0,
+    chunks: 0,
+  };
   const discoveredKeys = new Set();
   const existingKeys = new Set(await cfKvList(cfAccount, cfNamespace, cfToken));
   const newChunks = [];
@@ -400,7 +456,11 @@ async function main() {
 
     let branchList;
     try {
-      branchList = await ghRequest(`/repos/${fullName}/branches`, ghToken, "branches");
+      branchList = await ghRequest(
+        `/repos/${fullName}/branches`,
+        ghToken,
+        "branches",
+      );
     } catch (e) {
       // A single unreachable repo must not abort the whole run; it is retried on the next sync
       counts.warned += 1;
@@ -408,14 +468,17 @@ async function main() {
       continue;
     }
     const current = Object.fromEntries(
-      branchList.filter((b) => b.name && b.commit).map((b) => [b.name, b.commit.sha]),
+      branchList
+        .filter((b) => b.name && b.commit)
+        .map((b) => [b.name, b.commit.sha]),
     );
     if (Object.keys(current).length === 0) {
       counts.skipped += 1;
       continue;
     }
     // A repo counts as indexed when its first chunk exists, or the plan records it as empty (n=0)
-    const keyExists = existingKeys.has(`${fullName}@0`) || plannedEmpty.has(fullName);
+    const keyExists =
+      existingKeys.has(`${fullName}@0`) || plannedEmpty.has(fullName);
     if (shouldSkip(shaTable[fullName], current, keyExists, formatOk)) {
       counts.skipped += 1;
       continue;
@@ -465,15 +528,22 @@ async function main() {
     }
   }
   const carriedNames = new Set(carriedRepos.map((rp) => rp.r));
-  const carriedChunks = (prevPlan?.chunks ?? []).filter((c) => carriedNames.has(c.r));
+  const carriedChunks = (prevPlan?.chunks ?? []).filter((c) =>
+    carriedNames.has(c.r),
+  );
   const byText = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   const chunkNumber = (k) => Number(k.slice(k.lastIndexOf("@") + 1));
   const plan = {
     v: FORMAT_VERSION,
     chunks: [...newChunks, ...carriedChunks].sort(
-      (a, b) => byText(a.r, b.r) || byText(a.b, b.b) || chunkNumber(a.k) - chunkNumber(b.k),
+      (a, b) =>
+        byText(a.r, b.r) ||
+        byText(a.b, b.b) ||
+        chunkNumber(a.k) - chunkNumber(b.k),
     ),
-    repos: attachPushedAt([...newRepos, ...carriedRepos], pushedAt).sort((a, b) => byText(a.r, b.r)),
+    repos: attachPushedAt([...newRepos, ...carriedRepos], pushedAt).sort(
+      (a, b) => byText(a.r, b.r),
+    ),
     ts: Date.now(),
   };
   await cfKvPut(cfAccount, cfNamespace, cfToken, PLAN_KEY, plan, dryRun);
@@ -505,7 +575,15 @@ async function main() {
   // Only a successful full run may mark the stored format: a single-repo run that set it would make
   // the next full run skip repositories that never got chunked
   if (only.size === 0 && !dryRun) shaTable[FORMAT_KEY] = FORMAT_VERSION;
-  if (!dryRun) await cfKvPut(cfAccount, cfNamespace, cfToken, SHA_TABLE_KEY, shaTable, dryRun);
+  if (!dryRun)
+    await cfKvPut(
+      cfAccount,
+      cfNamespace,
+      cfToken,
+      SHA_TABLE_KEY,
+      shaTable,
+      dryRun,
+    );
 
   // Repo list snapshot: overwritten on full sync, unfiltered (matches the old Worker direct-query behavior); skipped on manual single-repo runs to avoid accidental deletion
   if (only.size === 0) {
@@ -538,7 +616,10 @@ async function main() {
 }
 
 // pathToFileURL matches the raw argv path even when it contains spaces or non-ASCII characters
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main().catch((e) => {
     console.error(e);
     process.exit(1);

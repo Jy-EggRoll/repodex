@@ -43,7 +43,9 @@ app.get("/api/get-repo-info", async (c) => {
 
   // The central index pre-writes this snapshot hourly; the Worker only reads KV (no GitHub token)
   try {
-    const cached = (await c.env.repo_index_kv.get(CACHE_KEY, { type: "json" })) as RepoInfoCache | null;
+    const cached = (await c.env.repo_index_kv.get(CACHE_KEY, {
+      type: "json",
+    })) as RepoInfoCache | null;
     if (cached && Array.isArray(cached.data)) {
       return c.json(cached.data);
     }
@@ -57,10 +59,13 @@ app.get("/api/get-repo-info", async (c) => {
 app.get("/api/search", async (c) => {
   const q = (c.req.query("q") || "").trim();
   if (!q) return c.json({ error: ERROR_CODES.emptyQuery }, 400);
-  if (!c.env.repo_index_kv) return c.json({ error: ERROR_CODES.kvUnavailable }, 500);
+  if (!c.env.repo_index_kv)
+    return c.json({ error: ERROR_CODES.kvUnavailable }, 500);
 
   try {
-    const stub = c.env.SEARCH_ENGINE.get(c.env.SEARCH_ENGINE.idFromName("global"));
+    const stub = c.env.SEARCH_ENGINE.get(
+      c.env.SEARCH_ENGINE.idFromName("global"),
+    );
     // Thin relay: the Durable Object loads, scans, and serializes the whole response under its own
     // CPU budget; this route only forwards the bytes (re-serializing here would burn the 10ms limit).
     const outcome = await stub.search({
@@ -80,9 +85,12 @@ app.get("/api/search", async (c) => {
 });
 
 app.get("/api/repo-list", async (c) => {
-  if (!c.env.repo_index_kv) return c.json({ error: ERROR_CODES.kvUnavailable }, 500);
+  if (!c.env.repo_index_kv)
+    return c.json({ error: ERROR_CODES.kvUnavailable }, 500);
   try {
-    const stub = c.env.SEARCH_ENGINE.get(c.env.SEARCH_ENGINE.idFromName("global"));
+    const stub = c.env.SEARCH_ENGINE.get(
+      c.env.SEARCH_ENGINE.idFromName("global"),
+    );
     // Same relay as /api/search: the plan grows with the corpus, so parsing it stays off the 10ms root budget
     const outcome = await stub.listIndexes();
     return c.body(outcome.json, outcome.status as ContentfulStatusCode, {

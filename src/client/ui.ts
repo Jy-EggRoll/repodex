@@ -16,7 +16,8 @@ export function staggerDelayMs(index: number): number {
 
 // —— Layout ——
 export const CONTENT_MAX_W = "max-w-5xl xl:max-w-7xl";
-export const RESULT_GRID = "grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3";
+export const RESULT_GRID =
+  "grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3";
 export const SHELL_PADDING = "p-4 sm:p-6";
 export const MIN_SEARCH_HEIGHT = "min-h-[56px]";
 export const DIALOG_MAX_H = "max-h-[60vh]";
@@ -25,6 +26,7 @@ export const DIALOG_MAX_H = "max-h-[60vh]";
 export const PANEL = "bg-kumo-base rounded-xl";
 export const HEADER_SHADOW = "shadow-sm";
 export const CONTENT_SHADOW = "shadow-md";
-export const CARD_SHELL = "border-kumo-line bg-kumo-elevated rounded-lg border p-3";
+export const CARD_SHELL =
+  "border-kumo-line bg-kumo-elevated rounded-lg border p-3";
 export const CARD_TRANSITION = "transition-[box-shadow,scale]";
 export const PAGE_TITLE = "text-kumo-strong mb-4 text-2xl font-bold";

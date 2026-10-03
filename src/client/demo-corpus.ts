@@ -36,7 +36,14 @@ function rng(seed: number): () => number {
   };
 }
 
-const EN_DIRS = ["src", "docs", "scripts", "assets", "tests", ".github/workflows"];
+const EN_DIRS = [
+  "src",
+  "docs",
+  "scripts",
+  "assets",
+  "tests",
+  ".github/workflows",
+];
 const EN_WORDS = [
   "index",
   "search",
@@ -51,7 +58,18 @@ const EN_WORDS = [
 ];
 const EN_EXTS = ["ts", "js", "md", "yml", "json"];
 // Chinese demo filenames/directories: exercise pinyin and Chinese filename search (kept in Chinese on purpose)
-const CN_WORDS = ["报告", "方案", "纪要", "合同", "手册", "计划", "总结", "规范", "申请", "通知"];
+const CN_WORDS = [
+  "报告",
+  "方案",
+  "纪要",
+  "合同",
+  "手册",
+  "计划",
+  "总结",
+  "规范",
+  "申请",
+  "通知",
+];
 const CN_EXTS = ["md", "docx", "txt"];
 const CN_DIRS = ["文档", "资料", "归档"];
 
@@ -131,15 +149,26 @@ export function buildDemoCorpus(seed: number = DEMO_SEED): DemoRepo[] {
           : `${pick(EN_WORDS)}-${i}.${pick(EN_EXTS)}`;
         const path = `${dir}/${name}`;
         dirSet.add(dir);
-        files.push({ name, path: `./${path}`, size: Math.floor(rand() * repo.fileMax) });
+        files.push({
+          name,
+          path: `./${path}`,
+          size: Math.floor(rand() * repo.fileMax),
+        });
       }
       if (repo.short === "demo-large") {
         for (const archive of BIG_ARCHIVES) {
-          files.push({ name: archive, path: `./assets/${archive}`, size: 80 * 1024 * 1024 });
+          files.push({
+            name: archive,
+            path: `./assets/${archive}`,
+            size: 80 * 1024 * 1024,
+          });
           dirSet.add("assets");
         }
       }
-      const directories: DemoDir[] = [...dirSet].map((d) => ({ name: d, path: `./${d}` }));
+      const directories: DemoDir[] = [...dirSet].map((d) => ({
+        name: d,
+        path: `./${d}`,
+      }));
       return { branch_name, files, directories };
     }),
   }));

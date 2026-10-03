@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { CARD_SHELL, CARD_TRANSITION } from "../ui";
 import { useEnterOnce } from "../hooks";
 
-const TITLE_CLASS = "text-kumo-strong text-lg leading-tight font-semibold break-all";
-const SUBTITLE_CLASS = "text-kumo-subtle mt-1 text-xs break-words break-all whitespace-pre-wrap";
+const TITLE_CLASS =
+  "text-kumo-strong text-lg leading-tight font-semibold break-all";
+const SUBTITLE_CLASS =
+  "text-kumo-subtle mt-1 text-xs break-words break-all whitespace-pre-wrap";
 
 interface ResultCardProps {
   href: string;
@@ -34,7 +36,11 @@ export default function ResultCard({
   leaving,
 }: ResultCardProps) {
   const enter = useEnterOnce(enterDelayMs);
-  const animationClass = leaving ? "card-leave" : enter.entering ? "card-enter" : "";
+  const animationClass = leaving
+    ? "card-leave"
+    : enter.entering
+      ? "card-enter"
+      : "";
   return (
     <a
       href={href}
@@ -47,12 +53,18 @@ export default function ResultCard({
       <div className="flex h-full w-full items-start justify-between gap-4">
         <div className="min-w-0 flex-1 text-left">
           {titleHtml !== undefined ? (
-            <div className={TITLE_CLASS} dangerouslySetInnerHTML={{ __html: titleHtml }} />
+            <div
+              className={TITLE_CLASS}
+              dangerouslySetInnerHTML={{ __html: titleHtml }}
+            />
           ) : (
             <div className={TITLE_CLASS}>{title}</div>
           )}
           {subtitleHtml !== undefined ? (
-            <div className={SUBTITLE_CLASS} dangerouslySetInnerHTML={{ __html: subtitleHtml }} />
+            <div
+              className={SUBTITLE_CLASS}
+              dangerouslySetInnerHTML={{ __html: subtitleHtml }}
+            />
           ) : (
             <div className={SUBTITLE_CLASS}>{subtitle}</div>
           )}

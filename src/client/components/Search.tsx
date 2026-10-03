@@ -1,6 +1,23 @@
-import { memo, startTransition, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  startTransition,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Input, Switch, Checkbox, Badge, Dialog, Loader, Empty } from "@cloudflare/kumo";
+import {
+  Button,
+  Input,
+  Switch,
+  Checkbox,
+  Badge,
+  Dialog,
+  Loader,
+  Empty,
+} from "@cloudflare/kumo";
 import { BugIcon, XIcon } from "@phosphor-icons/react";
 import {
   PAGE_SIZE,
@@ -12,7 +29,12 @@ import {
   DIALOG_MAX_H,
   staggerDelayMs,
 } from "../ui";
-import { buildFileParam, fetchIndexList, searchFiles, type SearchPerf } from "../api";
+import {
+  buildFileParam,
+  fetchIndexList,
+  searchFiles,
+  type SearchPerf,
+} from "../api";
 import { formatFileSize } from "../format";
 import { buildHighlighted } from "../../highlight";
 import { matchRanges } from "../../match";
@@ -103,13 +125,20 @@ function IndexRow({
   onToggle: (on: boolean) => void;
 }) {
   const enter = useEnterOnce();
-  const animationClass = leaving ? "card-leave" : enter.entering ? "card-enter" : "";
+  const animationClass = leaving
+    ? "card-leave"
+    : enter.entering
+      ? "card-enter"
+      : "";
   return (
     <div className={animationClass} onAnimationEnd={enter.onAnimationEnd}>
       <Checkbox
         label={
           html !== undefined ? (
-            <span className="text-sm break-all" dangerouslySetInnerHTML={{ __html: html }} />
+            <span
+              className="text-sm break-all"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
           ) : (
             <span className="text-sm break-all">{name}</span>
           )
@@ -122,9 +151,17 @@ function IndexRow({
   );
 }
 
-function LoadingRow({ center = false, children }: { center?: boolean; children: ReactNode }) {
+function LoadingRow({
+  center = false,
+  children,
+}: {
+  center?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div className={`mt-4 flex items-center gap-2 ${center ? "justify-center" : ""}`}>
+    <div
+      className={`mt-4 flex items-center gap-2 ${center ? "justify-center" : ""}`}
+    >
       <Loader size="sm" />
       <span className="text-sm text-kumo-subtle">{children}</span>
     </div>
@@ -198,7 +235,14 @@ export default function Search() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement | null)?.tagName;
-      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && tag !== "INPUT" && tag !== "TEXTAREA") {
+      if (
+        e.key === "/" &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        tag !== "INPUT" &&
+        tag !== "TEXTAREA"
+      ) {
         e.preventDefault();
         inputRef.current?.focus();
       }
@@ -233,7 +277,10 @@ export default function Search() {
         setTotal(data.total);
         setFileCount(data.fileCount);
         setDirCount(data.dirCount);
-        setPerf({ ...data, roundTripMs: Math.round(performance.now() - tStart) });
+        setPerf({
+          ...data,
+          roundTripMs: Math.round(performance.now() - tStart),
+        });
         startTransition(() => {
           setResults(data.results);
         });
@@ -298,7 +345,10 @@ export default function Search() {
     );
   }
 
-  const [displayResults, leavingResultKeys] = useListTransition(results ?? EMPTY_RESULTS, resultKey);
+  const [displayResults, leavingResultKeys] = useListTransition(
+    results ?? EMPTY_RESULTS,
+    resultKey,
+  );
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -333,8 +383,14 @@ export default function Search() {
     }
     return out;
   }, [indexes, indexFilter]);
-  const [displayIndexes, leavingIndexKeys] = useListTransition(filteredIndexes, indexKey);
-  const filteredNames = useMemo(() => filteredIndexes.map((option) => option.name), [filteredIndexes]);
+  const [displayIndexes, leavingIndexKeys] = useListTransition(
+    filteredIndexes,
+    indexKey,
+  );
+  const filteredNames = useMemo(
+    () => filteredIndexes.map((option) => option.name),
+    [filteredIndexes],
+  );
 
   function selectAll() {
     const next = Array.from(new Set([...checked, ...filteredNames]));
@@ -379,30 +435,40 @@ export default function Search() {
             searchFromInput(checked, next);
           }}
         />
-        <span className="text-xs text-kumo-subtle">{t("(path search by default)")}</span>
+        <span className="text-xs text-kumo-subtle">
+          {t("(path search by default)")}
+        </span>
       </div>
 
       <div className="mt-2">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <label className="font-medium text-kumo-strong">{t("Search (defaults to all indexes)")}</label>
+          <label className="font-medium text-kumo-strong">
+            {t("Search (defaults to all indexes)")}
+          </label>
           <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
             <Dialog.Trigger
               render={(p) => (
                 <Button {...p} variant="outline">
                   {t("Select indexes")}
                   <span className="ml-2 grid text-sm text-kumo-subtle tabular-nums">
-                    <span className="invisible col-start-1 row-start-1">{t("(loading indexes)")}</span>
+                    <span className="invisible col-start-1 row-start-1">
+                      {t("(loading indexes)")}
+                    </span>
                     <span className="invisible col-start-1 row-start-1">
                       {t("({0} selected)", { 0: 9999 })}
                     </span>
-                    <span className="col-start-1 row-start-1">{countLabel}</span>
+                    <span className="col-start-1 row-start-1">
+                      {countLabel}
+                    </span>
                   </span>
                 </Button>
               )}
             />
             <Dialog size="xl" className={SHELL_PADDING}>
               <div className="mb-4 flex items-start justify-between gap-4">
-                <Dialog.Title className="text-xl font-semibold">{t("Select indexes")}</Dialog.Title>
+                <Dialog.Title className="text-xl font-semibold">
+                  {t("Select indexes")}
+                </Dialog.Title>
                 <Dialog.Close
                   aria-label={t("Close")}
                   render={(props) => (
@@ -426,20 +492,39 @@ export default function Search() {
                   />
                 </div>
                 <div className="flex shrink-0 gap-2">
-                  <Button variant="secondary" size="sm" disabled={searching} onClick={selectAll}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={searching}
+                    onClick={selectAll}
+                  >
                     {t("Select all")}
                   </Button>
-                  <Button variant="secondary" size="sm" disabled={searching} onClick={invertSelection}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={searching}
+                    onClick={invertSelection}
+                  >
                     {t("Invert selection")}
                   </Button>
-                  <Button variant="secondary" size="sm" disabled={searching} onClick={clearAll}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={searching}
+                    onClick={clearAll}
+                  >
                     {t("Clear")}
                   </Button>
                 </div>
               </div>
-              <div className={`bg-kumo-base ${DIALOG_MAX_H} overflow-auto rounded-lg p-2`}>
+              <div
+                className={`bg-kumo-base ${DIALOG_MAX_H} overflow-auto rounded-lg p-2`}
+              >
                 {displayIndexes.length === 0 ? (
-                  <div className="card-enter p-3 text-sm text-kumo-subtle">{t("No matching indexes")}</div>
+                  <div className="card-enter p-3 text-sm text-kumo-subtle">
+                    {t("No matching indexes")}
+                  </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
                     {displayIndexes.map(({ name, html }) => (
@@ -474,7 +559,9 @@ export default function Search() {
               ref={inputRef}
               className="w-full"
               aria-label={t("Search files")}
-              placeholder={t("Type keywords, press Enter or click Search (press / to focus)")}
+              placeholder={t(
+                "Type keywords, press Enter or click Search (press / to focus)",
+              )}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !searching) searchFromInput();
               }}
@@ -525,10 +612,15 @@ export default function Search() {
 
       {/* Stacked grid: the three alternative states cross-fade in the same cell instead of shifting the page */}
       <div className="mt-6 grid">
-        <Fade show={results === null && !searching && !failure} className="[grid-area:1/1]">
+        <Fade
+          show={results === null && !searching && !failure}
+          className="[grid-area:1/1]"
+        >
           <Empty
             title={t("Type a keyword to start searching")}
-            description={t("Press Enter or click the search button; match by name or path")}
+            description={t(
+              "Press Enter or click the search button; match by name or path",
+            )}
           />
         </Fade>
         <Fade
@@ -587,10 +679,17 @@ export default function Search() {
           <div ref={sentinelRef} />
           {loadingMore && (
             <LoadingRow center>
-              {t("Loading more (showing {0} / {1} total)", { 0: results?.length ?? 0, 1: total })}
+              {t("Loading more (showing {0} / {1} total)", {
+                0: results?.length ?? 0,
+                1: total,
+              })}
             </LoadingRow>
           )}
-          {truncationNoticeVisible({ results, total, truncated: perf?.truncated === true }) && (
+          {truncationNoticeVisible({
+            results,
+            total,
+            truncated: perf?.truncated === true,
+          }) && (
             <div className="mt-4 rounded-lg border border-kumo-line bg-kumo-base p-3 text-center text-sm text-kumo-subtle">
               {t("Only the first {0} matches are shown", { 0: total })}
             </div>

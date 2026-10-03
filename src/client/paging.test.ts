@@ -24,10 +24,22 @@ function item(name: string): SearchResult {
 
 /** The list the submitted search produced: the identity paging is bound to. */
 const list = [item("a.md"), item("b.md")];
-const submitted: SubmittedSearch = { q: "readme", file: "all", mode: "path", results: list };
+const submitted: SubmittedSearch = {
+  q: "readme",
+  file: "all",
+  mode: "path",
+  results: list,
+};
 
 function state(overrides: Partial<PagingState> = {}): PagingState {
-  return { submitted, results: list, total: 350, busy: false, error: "", ...overrides };
+  return {
+    submitted,
+    results: list,
+    total: 350,
+    busy: false,
+    error: "",
+    ...overrides,
+  };
 }
 
 describe("pagingSource", () => {
@@ -36,7 +48,9 @@ describe("pagingSource", () => {
   });
 
   it("does not page before a search produced a list", () => {
-    expect(pagingSource(state({ submitted: null, results: null, total: 0 }))).toBeNull();
+    expect(
+      pagingSource(state({ submitted: null, results: null, total: 0 })),
+    ).toBeNull();
   });
 
   it("does not page while a request is already in flight", () => {
@@ -49,7 +63,9 @@ describe("pagingSource", () => {
 
   it("does not page a list that a different search produced", () => {
     // Same length as the submitted list: a length check would let this through, identity does not.
-    expect(pagingSource(state({ results: [item("x.md"), item("y.md")] }))).toBeNull();
+    expect(
+      pagingSource(state({ results: [item("x.md"), item("y.md")] })),
+    ).toBeNull();
     expect(pagingSource(state({ results: [item("z.md")] }))).toBeNull();
   });
 
@@ -61,7 +77,12 @@ describe("pagingSource", () => {
   it("carries the request the next page must be fetched with", () => {
     const source = pagingSource(
       state({
-        submitted: { q: "文档", file: "owner/repo,owner/other", mode: "name", results: list },
+        submitted: {
+          q: "文档",
+          file: "owner/repo,owner/other",
+          mode: "name",
+          results: list,
+        },
       }),
     );
     expect(source).toEqual({
@@ -75,14 +96,22 @@ describe("pagingSource", () => {
   it("keeps paging once a page was appended, and waits until the longer list is on screen", () => {
     const grown = [...list, item("c.md")];
     const grownSearch: SubmittedSearch = { ...submitted, results: grown };
-    expect(pagingSource(state({ submitted: grownSearch, results: grown, total: 350 }))).toEqual(grownSearch);
-    expect(pagingSource(state({ submitted: grownSearch, results: list }))).toBeNull();
+    expect(
+      pagingSource(
+        state({ submitted: grownSearch, results: grown, total: 350 }),
+      ),
+    ).toEqual(grownSearch);
+    expect(
+      pagingSource(state({ submitted: grownSearch, results: list })),
+    ).toBeNull();
   });
 });
 
 describe("totalAfterPage", () => {
   it("takes the total the page reported", () => {
-    expect(totalAfterPage({ results: [item("c.md")], total: 350 }, 3)).toBe(350);
+    expect(totalAfterPage({ results: [item("c.md")], total: 350 }, 3)).toBe(
+      350,
+    );
   });
 
   it("never reports fewer matches than the list already shows", () => {
@@ -100,7 +129,9 @@ describe("totalAfterPage", () => {
     const grown = [...list, item("c.md")];
     const grownSearch: SubmittedSearch = { ...submitted, results: grown };
     const total = totalAfterPage({ results: [], total: 350 }, grown.length);
-    expect(pagingSource(state({ submitted: grownSearch, results: grown, total }))).toBeNull();
+    expect(
+      pagingSource(state({ submitted: grownSearch, results: grown, total })),
+    ).toBeNull();
   });
 });
 
@@ -119,18 +150,26 @@ describe("resultsExhausted", () => {
 
 describe("truncationNoticeVisible", () => {
   it("shows only for a truncated search whose list has reached the cap", () => {
-    expect(truncationNoticeVisible({ results: list, total: 2, truncated: true })).toBe(true);
+    expect(
+      truncationNoticeVisible({ results: list, total: 2, truncated: true }),
+    ).toBe(true);
   });
 
   it("stays hidden while the capped list can still load more pages", () => {
-    expect(truncationNoticeVisible({ results: list, total: 1000, truncated: true })).toBe(false);
+    expect(
+      truncationNoticeVisible({ results: list, total: 1000, truncated: true }),
+    ).toBe(false);
   });
 
   it("stays hidden for a complete, untruncated result set", () => {
-    expect(truncationNoticeVisible({ results: list, total: 2, truncated: false })).toBe(false);
+    expect(
+      truncationNoticeVisible({ results: list, total: 2, truncated: false }),
+    ).toBe(false);
   });
 
   it("stays hidden before any list exists", () => {
-    expect(truncationNoticeVisible({ results: null, total: 0, truncated: true })).toBe(false);
+    expect(
+      truncationNoticeVisible({ results: null, total: 0, truncated: true }),
+    ).toBe(false);
   });
 });

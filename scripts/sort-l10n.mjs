@@ -7,7 +7,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const l10nDir = join(dirname(fileURLToPath(import.meta.url)), "..", "l10n");
-const files = (await readdir(l10nDir)).filter((f) => f.endsWith(".json")).sort();
+const files = (await readdir(l10nDir))
+  .filter((f) => f.endsWith(".json"))
+  .sort();
 
 for (const file of files) {
   const path = join(l10nDir, file);

@@ -1,7 +1,12 @@
 import { chunk } from "./batch";
 import { buildHighlighted } from "./highlight";
 import { matchRanges } from "./match";
-import { compareRank, rankKeyFromRanges, recencyBoost, type RankKey } from "./rank";
+import {
+  compareRank,
+  rankKeyFromRanges,
+  recencyBoost,
+  type RankKey,
+} from "./rank";
 import { ERROR_CODES, type ErrorCode, type SearchResult } from "./types";
 
 // Pure search pipeline, deliberately free of Cloudflare runtime imports (KV access is injected
@@ -90,8 +95,14 @@ export function basename(p: string): string {
 export function parsePlan(text: string | null): SearchPlan | null {
   if (!text) return null;
   try {
-    const raw = JSON.parse(text) as { v?: unknown; chunks?: unknown; repos?: unknown; ts?: unknown };
-    if (!raw || typeof raw !== "object" || (raw.v !== 2 && raw.v !== 3)) return null;
+    const raw = JSON.parse(text) as {
+      v?: unknown;
+      chunks?: unknown;
+      repos?: unknown;
+      ts?: unknown;
+    };
+    if (!raw || typeof raw !== "object" || (raw.v !== 2 && raw.v !== 3))
+      return null;
     if (!Array.isArray(raw.chunks) || !Array.isArray(raw.repos)) return null;
     return {
       v: raw.v,
@@ -108,7 +119,10 @@ function isPlanChunk(c: unknown): c is PlanChunk {
   if (!c || typeof c !== "object") return false;
   const o = c as Record<string, unknown>;
   return (
-    typeof o.k === "string" && typeof o.r === "string" && typeof o.b === "string" && typeof o.n === "number"
+    typeof o.k === "string" &&
+    typeof o.r === "string" &&
+    typeof o.b === "string" &&
+    typeof o.n === "number"
   );
 }
 
@@ -119,7 +133,11 @@ function isPlanRepo(r: unknown): r is PlanRepo {
 }
 
 /** Chunk payload: [[t, path] | [t, path, size], ...]; t=0 file, t=1 directory; name is derived, size omitted for directories. */
-export function decodeChunk(text: string, repository: string, branch: string): IndexEntry[] {
+export function decodeChunk(
+  text: string,
+  repository: string,
+  branch: string,
+): IndexEntry[] {
   const raw: unknown = JSON.parse(text);
   if (!Array.isArray(raw)) throw new Error("chunk is not an array");
   const out: IndexEntry[] = [];
@@ -138,7 +156,14 @@ export function decodeChunk(text: string, repository: string, branch: string): I
         type: "file",
       });
     } else if (t === 1) {
-      out.push({ name: basename(path), repository, branch, path, size: undefined, type: "directory" });
+      out.push({
+        name: basename(path),
+        repository,
+        branch,
+        path,
+        size: undefined,
+        type: "directory",
+      });
     } else {
       throw new Error("chunk entry has unknown type");
     }
@@ -191,7 +216,10 @@ export function errorOutcome(status: number, error: ErrorCode): Outcome {
   return { status, json: JSON.stringify({ error }) };
 }
 
-export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> {
+export async function runSearch(
+  get: KvGet,
+  spec: SearchSpec,
+): Promise<Outcome> {
   const q = (spec.q || "").trim();
   const file = (spec.file || "all").trim();
   if (!q) return errorOutcome(400, ERROR_CODES.emptyQuery);
@@ -251,7 +279,9 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
   const loadChunks = async (descs: PlanChunk[]): Promise<boolean> => {
     let done = 0;
     for (const batch of chunk(descs, LOAD_CONCURRENCY)) {
-      const values = await Promise.all(batch.map((d) => get(d.k).catch(() => null)));
+      const values = await Promise.all(
+        batch.map((d) => get(d.k).catch(() => null)),
+      );
       for (let j = 0; j < batch.length; j++) {
         const d = batch[j];
         const text = values[j];
@@ -287,10 +317,12 @@ export async function runSearch(get: KvGet, spec: SearchSpec): Promise<Outcome> 
     const plan = parsePlan(await get(PLAN_KEY).catch(() => null));
     if (!plan) return errorOutcome(503, ERROR_CODES.indexNotReady);
     for (const rp of plan.repos) {
-      if (typeof rp.t === "number" && Number.isFinite(rp.t)) repoTs.set(rp.r, rp.t);
+      if (typeof rp.t === "number" && Number.isFinite(rp.t))
+        repoTs.set(rp.r, rp.t);
     }
     const selection = resolveSelection(file, plan);
-    if (selection.kind === "invalid") return errorOutcome(400, ERROR_CODES.invalidFile);
+    if (selection.kind === "invalid")
+      return errorOutcome(400, ERROR_CODES.invalidFile);
 
     if (selection.kind === "all") {
       await loadChunks(plan.chunks);

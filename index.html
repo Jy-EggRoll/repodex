@@ -24,8 +24,12 @@
         document.documentElement.setAttribute("data-theme", "kumo");
         document.documentElement.setAttribute("data-mode", m);
         var l = localStorage.getItem("lang");
-        if (l !== "en" && l !== "zh-cn") l = /^zh/i.test(navigator.language || "") ? "zh-cn" : "en";
-        document.documentElement.setAttribute("lang", l === "zh-cn" ? "zh-CN" : "en");
+        if (l !== "en" && l !== "zh-cn")
+          l = /^zh/i.test(navigator.language || "") ? "zh-cn" : "en";
+        document.documentElement.setAttribute(
+          "lang",
+          l === "zh-cn" ? "zh-CN" : "en",
+        );
       } catch (e) {}
     </script>
   </head>

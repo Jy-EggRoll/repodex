@@ -13,10 +13,15 @@ export const RECENCY_MAX_BONUS = 0.5;
 export const RECENCY_HALF_LIFE_DAYS = 30;
 
 /** Boost for an entry whose repository was pushed at `pushedAtMs`; unknown timestamps are neutral. */
-export function recencyBoost(pushedAtMs: number | undefined, nowMs: number): number {
+export function recencyBoost(
+  pushedAtMs: number | undefined,
+  nowMs: number,
+): number {
   if (typeof pushedAtMs !== "number" || !Number.isFinite(pushedAtMs)) return 1;
   const ageDays = Math.max(0, nowMs - pushedAtMs) / 86400000;
-  return 1 + RECENCY_MAX_BONUS * Math.pow(0.5, ageDays / RECENCY_HALF_LIFE_DAYS);
+  return (
+    1 + RECENCY_MAX_BONUS * Math.pow(0.5, ageDays / RECENCY_HALF_LIFE_DAYS)
+  );
 }
 
 export function rankKeyFromRanges(

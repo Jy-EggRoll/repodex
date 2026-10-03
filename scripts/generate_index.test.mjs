@@ -15,7 +15,9 @@ import {
 
 describe("parseBlocklist", () => {
   it("ignores comments, blank lines, and surrounding whitespace", () => {
-    expect(parseBlocklist("# comment\n\no/a  \n  o/b\n")).toEqual(new Set(["o/a", "o/b"]));
+    expect(parseBlocklist("# comment\n\no/a  \n  o/b\n")).toEqual(
+      new Set(["o/a", "o/b"]),
+    );
   });
 
   it("empty file yields an empty set", () => {
@@ -30,7 +32,9 @@ describe("needsUpdate", () => {
 
   it("sha changes, branch additions/removals, and first record all need an update", () => {
     expect(needsUpdate({ main: "aaa" }, { main: "bbb" })).toBe(true);
-    expect(needsUpdate({ main: "aaa" }, { main: "aaa", dev: "ccc" })).toBe(true);
+    expect(needsUpdate({ main: "aaa" }, { main: "aaa", dev: "ccc" })).toBe(
+      true,
+    );
     expect(needsUpdate(undefined, { main: "aaa" })).toBe(true);
   });
 });
@@ -41,15 +45,21 @@ describe("shouldSkip", () => {
   });
 
   it("rebuilds when SHAs match but the repo has no index data (prevents silently missing indexes)", () => {
-    expect(shouldSkip({ main: "aaa" }, { main: "aaa" }, false, true)).toBe(false);
+    expect(shouldSkip({ main: "aaa" }, { main: "aaa" }, false, true)).toBe(
+      false,
+    );
   });
 
   it("rebuilds when SHAs change", () => {
-    expect(shouldSkip({ main: "aaa" }, { main: "bbb" }, true, true)).toBe(false);
+    expect(shouldSkip({ main: "aaa" }, { main: "bbb" }, true, true)).toBe(
+      false,
+    );
   });
 
   it("rebuilds everything when the stored format is outdated", () => {
-    expect(shouldSkip({ main: "aaa" }, { main: "aaa" }, true, false)).toBe(false);
+    expect(shouldSkip({ main: "aaa" }, { main: "aaa" }, true, false)).toBe(
+      false,
+    );
   });
 });
 
@@ -97,7 +107,11 @@ describe("buildChunkWrites", () => {
   const repo = { fullName: "o/r" };
 
   it("chunks stay inside one branch and slice at the item cap", () => {
-    const items = Array.from({ length: 20001 }, (_, i) => ({ type: "file", path: `f${i}`, size: i }));
+    const items = Array.from({ length: 20001 }, (_, i) => ({
+      type: "file",
+      path: `f${i}`,
+      size: i,
+    }));
     const branches = [
       { branch: "main", items },
       {
@@ -136,7 +150,9 @@ describe("buildChunkWrites", () => {
   });
 
   it("an empty repository yields no chunks but keeps a repo ref", () => {
-    const { chunks, repo: ref } = buildChunkWrites(repo, [{ branch: "main", items: [] }]);
+    const { chunks, repo: ref } = buildChunkWrites(repo, [
+      { branch: "main", items: [] },
+    ]);
     expect(chunks).toEqual([]);
     expect(ref).toEqual({ r: "o/r", n: 0 });
   });
@@ -145,8 +161,12 @@ describe("buildChunkWrites", () => {
 describe("attachPushedAt", () => {
   it("fills t from the map and keeps a previously stored value on a map miss", () => {
     const map = new Map([["o/a", 111]]);
-    expect(attachPushedAt([{ r: "o/a", n: 3 }], map)).toEqual([{ r: "o/a", n: 3, t: 111 }]);
-    expect(attachPushedAt([{ r: "o/b", n: 3, t: 222 }], map)).toEqual([{ r: "o/b", n: 3, t: 222 }]);
+    expect(attachPushedAt([{ r: "o/a", n: 3 }], map)).toEqual([
+      { r: "o/a", n: 3, t: 111 },
+    ]);
+    expect(attachPushedAt([{ r: "o/b", n: 3, t: 222 }], map)).toEqual([
+      { r: "o/b", n: 3, t: 222 },
+    ]);
   });
 
   it("does not mutate the input and tolerates a missing list", () => {
@@ -169,16 +189,26 @@ describe("computePruneList", () => {
       "__meta-sha-table",
     ];
     const prune = computePruneList(existing, [{ k: "o/r1@0" }]);
-    expect(prune).toEqual(["legacy-index", "legacy-index@0", "o/r1@9", "o/r2@0"]);
+    expect(prune).toEqual([
+      "legacy-index",
+      "legacy-index@0",
+      "o/r1@9",
+      "o/r2@0",
+    ]);
   });
 
   it("leaves unrelated keys alone", () => {
-    expect(computePruneList(["repo-info-cache", "other", "__meta-plan"], [])).toEqual([]);
+    expect(
+      computePruneList(["repo-info-cache", "other", "__meta-plan"], []),
+    ).toEqual([]);
   });
 
   it("REPOS_ONLY-style calls with nothing planned prune everything else, so main() must guard the call", () => {
     // Documents the blast radius: this is exactly why single-repo runs never call computePruneList
-    expect(computePruneList(["o/a@0", "o/b@0"], [])).toEqual(["o/a@0", "o/b@0"]);
+    expect(computePruneList(["o/a@0", "o/b@0"], [])).toEqual([
+      "o/a@0",
+      "o/b@0",
+    ]);
   });
 });
 
@@ -231,15 +261,27 @@ describe("withRetry", () => {
 describe("cfKvList", () => {
   it("follows the cursor until the list is complete", async () => {
     const pages = [
-      { success: true, result: [{ name: "a" }], result_info: { cursor: "cursor-1" } },
-      { success: true, result: [{ name: "b" }], result_info: { list_complete: true } },
+      {
+        success: true,
+        result: [{ name: "a" }],
+        result_info: { cursor: "cursor-1" },
+      },
+      {
+        success: true,
+        result: [{ name: "b" }],
+        result_info: { list_complete: true },
+      },
     ];
     const calls = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url) => {
         calls.push(String(url));
-        return { ok: true, status: 200, json: async () => pages[calls.length - 1] };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => pages[calls.length - 1],
+        };
       }),
     );
     try {
@@ -261,7 +303,11 @@ describe("cfKvList", () => {
     let i = 0;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true, status: 200, json: async () => pages[i++] })),
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => pages[i++],
+      })),
     );
     try {
       expect(await cfKvList("acct", "ns", "token")).toEqual(["a", "b"]);
@@ -289,7 +335,13 @@ describe("buildRepoInfo", () => {
   it("skips repos without a valid name", () => {
     const repos = [
       { name: "", full_name: "", size: 100, description: null, html_url: "" },
-      { name: "valid", full_name: "owner/valid", size: 200, description: null, html_url: "" },
+      {
+        name: "valid",
+        full_name: "owner/valid",
+        size: 200,
+        description: null,
+        html_url: "",
+      },
     ];
     expect(buildRepoInfo(repos)).toHaveLength(1);
   });
