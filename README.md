@@ -161,7 +161,7 @@ KV key layout (all intentional):
 
 UI strings follow the VS Code l10n conventions: English source strings are the keys, and translations live in `l10n/bundle.l10n.json` (English identity map) plus `l10n/bundle.l10n.<locale>.json` (e.g. `zh-cn`). Components translate through i18next / react-i18next, configured for flat English keys and `{0}`-style placeholders; the browser language is detected automatically and a manual choice is remembered.
 
-When you add or edit a visible string: wrap it with `t("...")`, add the key to every bundle, then run `pnpm l10n:sort`. The test suite enforces that all locales share the same key set with matching `{n}` placeholders.
+When you add or edit a visible string: wrap it with `t("...")`, add the key to every bundle, then run `pnpm l10n:sort`. The test suite enforces that all locales share the same key set with matching `{n}` placeholders. Server error codes are translation keys too — they are collected in `ERROR_CODES` (`src/types.ts`) and a test walks that table, so adding a code without its translations fails the suite. To reuse this setup in another repository, see [docs/l10n-checklist.md](./docs/l10n-checklist.md).
 
 ## Development
 

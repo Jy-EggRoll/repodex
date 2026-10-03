@@ -150,7 +150,7 @@ KV 中的 key 布局（均为有意设计）：
 
 界面文案遵循 VSCode l10n 约定：英文原文作 key，翻译位于 `l10n/bundle.l10n.json`（英文基准）与 `l10n/bundle.l10n.<locale>.json`（如 `zh-cn`）。组件通过 i18next / react-i18next 取词，配置为扁平英文 key 与 `{0}` 占位符；浏览器语言自动识别，手动选择会被记住。
 
-新增或修改可见字符串时：用 `t("...")` 包裹，在所有文案包中补齐 key，然后运行 `pnpm l10n:sort`。测试套件会强制校验各语言 key 集合一致、`{n}` 占位符一一对应。
+新增或修改可见字符串时：用 `t("...")` 包裹，在所有文案包中补齐 key，然后运行 `pnpm l10n:sort`。测试套件会强制校验各语言 key 集合一致、`{n}` 占位符一一对应。服务端错误码同样是翻译键——它们集中在 `ERROR_CODES`（`src/types.ts`），测试会遍历该表，所以只加错误码、不补译文会直接导致测试失败。要把这套方案复用到其他仓库，见 [docs/l10n-checklist.zh-cn.md](./docs/l10n-checklist.zh-cn.md)。
 
 ## 本地开发与工程化
 
