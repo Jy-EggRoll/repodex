@@ -58,7 +58,7 @@ export default function ResultCard({
           )}
         </div>
         <div className="flex shrink-0 flex-col items-end justify-start">
-          <div className="text-kumo-subtle text-sm">{meta}</div>
+          <div className="text-sm text-kumo-subtle">{meta}</div>
           <div className="mt-2">{badge}</div>
         </div>
       </div>
@@ -70,8 +70,8 @@ export default function ResultCard({
 export function CardSkeleton() {
   return (
     <div aria-hidden className={`${CARD_SHELL} h-[76px]`}>
-      <div className="bg-kumo-fill h-5 w-2/3 animate-pulse rounded" />
-      <div className="bg-kumo-fill mt-2 h-3 w-1/2 animate-pulse rounded" />
+      <div className="h-5 w-2/3 animate-pulse rounded bg-kumo-fill" />
+      <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-kumo-fill" />
     </div>
   );
 }

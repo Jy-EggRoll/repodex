@@ -99,9 +99,9 @@ export default function App() {
   const langLabel = languageLabel(lang, t("Follow system"));
 
   return (
-    <div className="bg-kumo-tint text-kumo-default min-h-screen antialiased">
+    <div className="min-h-screen bg-kumo-tint text-kumo-default antialiased">
       {DEMO && (
-        <div className="bg-kumo-info-tint text-kumo-strong px-4 py-2 text-center text-sm">
+        <div className="bg-kumo-info-tint px-4 py-2 text-center text-sm text-kumo-strong">
           {t("Demo mode: data is fictional, search logic matches the production version")}
         </div>
       )}
@@ -112,7 +112,7 @@ export default function App() {
         >
           <div className="flex items-center gap-1">
             <button
-              className="text-kumo-strong px-2 text-lg font-semibold sm:text-xl"
+              className="px-2 text-lg font-semibold text-kumo-strong sm:text-xl"
               onClick={() => setTab("repos")}
             >
               RepoDex
@@ -193,7 +193,7 @@ export default function App() {
           </div>
         </div>
 
-        <footer className="text-kumo-subtle mt-6 pb-2 text-center text-xs">
+        <footer className="mt-6 pb-2 text-center text-xs text-kumo-subtle">
           <div>© {new Date().getFullYear()} Jy-EggRoll · GPL-3.0</div>
           <div className="mt-1">Powered by Cloudflare Workers · Kumo</div>
         </footer>

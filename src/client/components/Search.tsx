@@ -126,7 +126,7 @@ function LoadingRow({ center = false, children }: { center?: boolean; children: 
   return (
     <div className={`mt-4 flex items-center gap-2 ${center ? "justify-center" : ""}`}>
       <Loader size="sm" />
-      <span className="text-kumo-subtle text-sm">{children}</span>
+      <span className="text-sm text-kumo-subtle">{children}</span>
     </div>
   );
 }
@@ -379,18 +379,18 @@ export default function Search() {
             searchFromInput(checked, next);
           }}
         />
-        <span className="text-kumo-subtle text-xs">{t("(path search by default)")}</span>
+        <span className="text-xs text-kumo-subtle">{t("(path search by default)")}</span>
       </div>
 
       <div className="mt-2">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <label className="text-kumo-strong font-medium">{t("Search (defaults to all indexes)")}</label>
+          <label className="font-medium text-kumo-strong">{t("Search (defaults to all indexes)")}</label>
           <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
             <Dialog.Trigger
               render={(p) => (
                 <Button {...p} variant="outline">
                   {t("Select indexes")}
-                  <span className="text-kumo-subtle ml-2 grid text-sm tabular-nums">
+                  <span className="ml-2 grid text-sm text-kumo-subtle tabular-nums">
                     <span className="invisible col-start-1 row-start-1">{t("(loading indexes)")}</span>
                     <span className="invisible col-start-1 row-start-1">
                       {t("({0} selected)", { 0: 9999 })}
@@ -439,7 +439,7 @@ export default function Search() {
               </div>
               <div className={`bg-kumo-base ${DIALOG_MAX_H} overflow-auto rounded-lg p-2`}>
                 {displayIndexes.length === 0 ? (
-                  <div className="text-kumo-subtle card-enter p-3 text-sm">{t("No matching indexes")}</div>
+                  <div className="card-enter p-3 text-sm text-kumo-subtle">{t("No matching indexes")}</div>
                 ) : (
                   <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
                     {displayIndexes.map(({ name, html }) => (
@@ -541,7 +541,7 @@ export default function Search() {
           />
         </Fade>
         <Fade show={displayResults.length > 0} className="[grid-area:1/1]">
-          <h2 className="text-kumo-strong mb-2 text-lg font-semibold">
+          <h2 className="mb-2 text-lg font-semibold text-kumo-strong">
             {t("Results ({0}{1} total · {2} files / {3} folders)", {
               0: total,
               1: perf?.truncated ? "+" : "",
@@ -550,7 +550,7 @@ export default function Search() {
             })}
           </h2>
           {debug && perf && (
-            <div className="border-kumo-line bg-kumo-base mb-3 rounded-lg border p-3 font-mono text-xs">
+            <div className="mb-3 rounded-lg border border-kumo-line bg-kumo-base p-3 font-mono text-xs">
               <div className="text-kumo-subtle">
                 {t("Server {0}ms (fetch {1} / match {2})", {
                   0: perf.tookMs,
@@ -558,14 +558,14 @@ export default function Search() {
                   2: perf.searchMs,
                 })}
               </div>
-              <div className="text-kumo-subtle mt-1">
+              <div className="mt-1 text-kumo-subtle">
                 {t("Network round trip {0}ms · returned {1}/{2}", {
                   0: perf.roundTripMs,
                   1: results?.length ?? 0,
                   2: total,
                 })}
               </div>
-              <div className="text-kumo-subtle mt-1">
+              <div className="mt-1 text-kumo-subtle">
                 {t("Indexes {0} · items {1} · load failures {2}", {
                   0: perf.indexCount,
                   1: perf.itemsTotal,
@@ -591,7 +591,7 @@ export default function Search() {
             </LoadingRow>
           )}
           {truncationNoticeVisible({ results, total, truncated: perf?.truncated === true }) && (
-            <div className="border-kumo-line bg-kumo-base text-kumo-subtle mt-4 rounded-lg border p-3 text-center text-sm">
+            <div className="mt-4 rounded-lg border border-kumo-line bg-kumo-base p-3 text-center text-sm text-kumo-subtle">
               {t("Only the first {0} matches are shown", { 0: total })}
             </div>
           )}

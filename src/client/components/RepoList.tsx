@@ -108,7 +108,7 @@ export default function RepoList() {
 
       <Fade
         show={loaded && !error && repos.length > 0 && displayRepos.length === 0}
-        className="text-kumo-subtle mt-6 text-sm"
+        className="mt-6 text-sm text-kumo-subtle"
       >
         {t("No matching repositories")}
       </Fade>
