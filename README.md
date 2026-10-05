@@ -1,36 +1,21 @@
----
-title: 项目介绍-repodex
-description: 基于 GitHub Actions、Cloudflare Workers 和 React + Vite + Kumo 前端，实现了一套跨仓库、跨分支的多维度模糊搜索系统，以提升用户在 GitHub 上的文件检索效率。
-date: 2026-01-16
-lastmod: 2026-09-10
-image:
-categories:
-  - 项目
-tags:
-  - Cloudflare
-  - GitHub
-  - 模糊搜索
-weight: 1
----
-
 # RepoDex
 
 [![Check](https://github.com/Jy-EggRoll/repodex/actions/workflows/check.yml/badge.svg)](https://github.com/Jy-EggRoll/repodex/actions/workflows/check.yml)
 
 English | [简体中文](./README_zh-cn.md)
 
-RepoDex (**Repo**sitoryIn**dex**) aggregates repository indexes into a **cross-repository, cross-branch fuzzy file search** system, built on GitHub Actions, Cloudflare Workers, and a React + Vite + Kumo frontend.
+RepoDex (**Repo**sitory In**dex**) aggregates repository indexes into a **cross-repository, cross-branch fuzzy file search** system, built on GitHub Actions, Cloudflare Workers, and a React + Vite + Kumo frontend.
 
 - Try it online (demo data is fictional; the search logic is the same as production): [RepoDex Demo](https://jy-eggroll.github.io/repodex/)
 - Blog post: [项目介绍-RepoDex](https://eggroll.pages.dev/p/项目介绍-repodex/)
 
-The project is designed to be **easy to configure and free to run**: in normal use you will stay **far below** the free tiers of GitHub Actions and Cloudflare, so you can deploy it with confidence and no billing concerns.
+The project aims to be **easy to configure and free to run**: in normal use your usage stays **far below** the free tiers of GitHub Actions and Cloudflare, so you can deploy it with confidence and without billing concerns.
 
 ## Why RepoDex
 
 Over time, developers accumulate many repositories on GitHub — code, documents, resources. GitHub itself has no **global file search across repositories and branches**, which makes finding a file painful. For Chinese users it is worse: many filenames are Chinese, and GitHub does not support pinyin fuzzy search.
 
-RepoDex fills that gap with a cross-repository, cross-branch fuzzy search system to make file retrieval on GitHub efficient.
+RepoDex fills that gap, making file retrieval on GitHub more efficient.
 
 ## What it looks like
 
@@ -42,7 +27,7 @@ The screenshot above uses "Search by name" — note how English, Chinese, full p
 
 ![Index selection](https://raw.githubusercontent.com/Jy-EggRoll/repodex/refs/heads/main/readme_img/选择索引.png)
 
-Indexes can be selected (all selected by default). The dialog filters index names live and offers select all / invert / clear in one click; changing the selection re-searches immediately when a keyword exists. Search is manually submitted (Enter or the button), at most the first 100 results are shown, and huge matches are scored only up to the first 1000 entries with an approximate total — so requests never time out.
+Indexes can be selected (all selected by default). The dialog filters index names live and offers select all / invert / clear in one click; changing the selection re-searches immediately when a keyword exists. Search is manually submitted (Enter or the button), results load 100 at a time as you scroll and stop at 1000, and huge matches are scored only up to the first 1000 entries with an approximate total — so requests never time out.
 
 ### Clean wide-screen layout
 
@@ -121,7 +106,7 @@ Create a token with the Workers KV Storage permission. It is shown only once (= 
 
 The central workflow (`.github/workflows/central-index.yml`) generates every index — **no per-repo configuration**:
 
-- Auto-discovery: scans all of your repositories — personal, organization, and collaborator — at minute 42 of every hour (deliberately off the hour, when GitHub runners are less contended; archived/disabled skipped), compares branch SHAs, and processes only changed repositories; the rest are skipped without any per-repo output.
+- Auto-discovery: scans all of your repositories — personal, organization, and collaborator — at minute 42 of every hour (deliberately off the hour, when GitHub runners are less contended; archived/disabled skipped), compares branch SHAs, and processes only changed repositories; the rest are skipped without any per-repo output. The workflow also runs on any branch push.
 - Blocklist: add one `owner/repo` line to `repos-blocklist.txt` to exclude a repository.
 - Manual runs: Actions → Central Repository Index → Run workflow (optionally a single repo, or a dry-run preview that only reports counts).
 - Cleanup: indexes of deleted repositories are pruned automatically. The first run backfills everything; later runs are incremental.
@@ -137,8 +122,8 @@ Smoke test: ① the home page loads and login works ② a keyword returns result
 ## Features
 
 - **Pinyin and fuzzy search**: remember just a keyword from a filename and fuzzy-find any file. "Search by path" is on by default, so even when the keyword is not in the filename itself, a well-organized path still matches.
-- **Fast**: Cloudflare Workers with Cloudflare KV make search quick. Cloudflare's global CDN keeps the page itself fast, and Cloudflare-to-GitHub request latency is ideal.
-- **Strictly private**: HTTPS-authenticated (Hono Basic Auth). Only someone who has both the username and password from the Cloudflare secrets can access it (usually just you). Rotate them in the Cloudflare dashboard whenever you like. Authentication guards the entire root path — without it, neither pages nor API assets are reachable, which eliminates the attack surface entirely.
+- **Fast**: Cloudflare Workers with Cloudflare KV make search quick. Cloudflare's global CDN keeps the page itself fast, and requests from Cloudflare to GitHub are fast too.
+- **Strictly private**: HTTPS-authenticated (Hono Basic Auth). Only someone who has both the username and password from the Cloudflare secrets can access it (usually just you). Rotate them in the Cloudflare dashboard whenever you like. Authentication guards the entire root path — without it, neither pages nor API assets are reachable, which leaves very little attack surface.
 
 ## Architecture
 
@@ -148,12 +133,12 @@ An automation workflow in this repository (`.github/workflows/central-index.yml`
 
 At minute 42 of every hour (deliberately off the hour mark), or on manual dispatch, it scans all repositories, compares branch SHAs against the KV record, pulls file trees and merges the global index only for changed repositories, writes it into Cloudflare KV, and prunes indexes of deleted repositories (leftover keys from retired index formats are cleaned up too).
 
-Search is served by a Durable Object (its 30s CPU budget replaces the 10ms Worker limit on the free plan), which loads index chunks in batches — corpus size no longer causes 503s.
+Search is served by a Durable Object (each request gets a 30-second CPU budget, replacing the 10-millisecond limit of a Worker on the free plan), which loads index chunks in batches — index size no longer causes 503s.
 
 KV key layout (all intentional):
 
 - `__meta-plan` — chunk manifest + repository list; the single source of truth the Worker reads for search and the index list
-- `{owner}/{repo}@{i}` — per-repository index chunk (≤ 20,000 entries each; repositories are never mixed in a chunk)
+- `{owner}/{repo}@{i}` — per-repository index chunk (≤ 20,000 entries each; a chunk never mixes repositories or branches)
 - `repo-info-cache` — repository list snapshot, rewritten hourly by central indexing (the Worker only reads it)
 - `__meta-sha-table` — branch SHA table for change detection
 
@@ -169,8 +154,8 @@ When you add or edit a visible string: wrap it with `t("...")`, add the key to e
 pnpm install        # install dependencies
 pnpm dev:client     # frontend dev server (Vite)
 pnpm dev            # Worker dev server (requires wrangler login)
-pnpm check          # gate: format check + typecheck + tests + build
-pnpm test           # unit tests (Vitest, pure-logic seeds)
+pnpm check          # complete check: typegen + format + typecheck + tests + build
+pnpm test           # unit tests (Vitest, pure logic, no browser environment)
 pnpm l10n:sort      # sort /l10n bundles by key
 pnpm format         # Prettier across the repo (incl. Tailwind class order)
 pnpm deploy         # build the frontend and deploy the Worker
@@ -186,7 +171,7 @@ Run `pnpm check` before committing; CI (`.github/workflows/check.yml`) runs the 
 
 - Cloudflare for Workers, Git integration, KV, and the free tier that makes this project possible.
 - [text-search-engine](https://github.com/cjinhuo/text-search-engine) — a mature search engine with great compatibility and performance, supporting pinyin and fuzzy search.
-- [Hono](https://github.com/honojs) — the fastest framework on Cloudflare, providing strict, secure authentication.
+- [Hono](https://github.com/honojs) — fast responses and strict authentication on Cloudflare.
 - [Kumo](https://kumo-ui.com) — Cloudflare's official React component library, providing consistent UI and accessibility.
 - [React](https://react.dev), [Vite](https://vite.dev), and [Tailwind CSS v4](https://tailwindcss.com) — the frontend build and styling foundation.
 - [i18next](https://www.i18next.com) / [react-i18next](https://react.i18next.com) — the i18n runtime; the bundle layout follows VS Code's l10n conventions.
