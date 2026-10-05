@@ -8,7 +8,7 @@ assignees: Jy-EggRoll
 
 Please write in **Chinese** or **English**.
 
-## Is your feature request related to a problem
+## Is your feature request related to a problem?
 
 A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
 
