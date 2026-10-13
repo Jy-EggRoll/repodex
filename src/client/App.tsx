@@ -9,6 +9,7 @@ import {
   TranslateIcon,
 } from "@phosphor-icons/react";
 import RepoList from "./components/RepoList";
+import ResizableContent from "./components/ResizableContent";
 import Search from "./components/Search";
 import {
   loadSetting,
@@ -23,13 +24,7 @@ import i18n, {
   type LanguageSetting,
   type Locale,
 } from "./i18n";
-import {
-  CONTENT_MAX_W,
-  SHELL_PADDING,
-  PANEL,
-  HEADER_SHADOW,
-  CONTENT_SHADOW,
-} from "./ui";
+import { SHELL_PADDING, PANEL, HEADER_SHADOW, CONTENT_SHADOW } from "./ui";
 import { DEMO } from "./api";
 
 const THEME_META: Record<
@@ -138,7 +133,8 @@ export default function App() {
           )}
         </div>
       )}
-      <div className={`mx-auto ${CONTENT_MAX_W}`}>
+      {/* Resizable and centred: the sticky header, the panel and the footer all share one user-set width */}
+      <ResizableContent>
         {/* No z-index: Kumo dialogs portal to the end of body and cover the page; z-index here would cover the dialogs instead */}
         <div
           className={`${PANEL} sticky top-4 mb-6 flex flex-wrap items-center justify-between gap-2 px-4 py-3 ${HEADER_SHADOW}`}
@@ -251,7 +247,7 @@ export default function App() {
           <div>© {new Date().getFullYear()} Jy-EggRoll · GPL-3.0</div>
           <div className="mt-1">Powered by Cloudflare Workers · Kumo</div>
         </footer>
-      </div>
+      </ResizableContent>
     </div>
   );
 }

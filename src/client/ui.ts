@@ -15,7 +15,7 @@ export function staggerDelayMs(index: number): number {
 }
 
 // —— Layout ——
-export const CONTENT_MAX_W = "max-w-5xl xl:max-w-7xl";
+// Content width is user-resizable and lives in components/ResizableContent.tsx
 export const RESULT_GRID =
   "grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3";
 export const SHELL_PADDING = "p-4 sm:p-6";

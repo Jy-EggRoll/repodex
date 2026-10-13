@@ -41,6 +41,7 @@ Repository risk badges: `>900MB` danger, `800–900MB` warning, `<800MB` safe. Y
 - Files from all branches are searched by default (determined by the index).
 - Three theme modes (follow system / light / dark; defaults to follow system, and a manual choice is remembered).
 - Bilingual UI — English / 简体中文 — auto-detected from the browser, switchable manually, and the choice is remembered. All UI strings are wrapped through the l10n layer (VS Code l10n style: English source strings as keys, bundles in `/l10n`).
+- Content width is resizable: drag either side to widen or narrow, double-click to reset, and the width is remembered on this device (localStorage, not synced across devices; no handles on touch devices).
 
 ## Deployment
 

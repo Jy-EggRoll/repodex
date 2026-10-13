@@ -10,9 +10,12 @@
   "Dark": "深色",
   "Debug mode": "调试模式",
   "Debug mode: show detailed performance info": "调试模式：显示详细性能信息",
+  "Default width": "默认宽度",
   "Demo data, not a real repository": "演示数据，非真实仓库",
   "Demo mode: data is fictional, search logic matches the production version": "演示模式：数据为虚构样例，搜索逻辑与正式版一致",
   "Done": "完成",
+  "Drag to resize content width": "拖动调整内容宽度",
+  "Drag to resize, double-click to reset": "拖动调整宽度，双击复位",
   "File": "文件",
   "File Search": "文件搜索",
   "Filter indexes": "筛选索引",
@@ -63,5 +66,6 @@
   "internal error": "内部错误",
   "invalid file": "无效的索引参数",
   "not found": "索引不存在或已被清理",
-  "repo_index_kv binding is not available": "索引存储（repo_index_kv）未绑定，请检查部署配置"
+  "repo_index_kv binding is not available": "索引存储（repo_index_kv）未绑定，请检查部署配置",
+  "{0} pixels": "{0} 像素"
 }

@@ -10,9 +10,12 @@
   "Dark": "Dark",
   "Debug mode": "Debug mode",
   "Debug mode: show detailed performance info": "Debug mode: show detailed performance info",
+  "Default width": "Default width",
   "Demo data, not a real repository": "Demo data, not a real repository",
   "Demo mode: data is fictional, search logic matches the production version": "Demo mode: data is fictional, search logic matches the production version",
   "Done": "Done",
+  "Drag to resize content width": "Drag to resize content width",
+  "Drag to resize, double-click to reset": "Drag to resize, double-click to reset",
   "File": "File",
   "File Search": "File Search",
   "Filter indexes": "Filter indexes",
@@ -63,5 +66,6 @@
   "internal error": "internal error",
   "invalid file": "invalid file",
   "not found": "not found",
-  "repo_index_kv binding is not available": "repo_index_kv binding is not available"
+  "repo_index_kv binding is not available": "repo_index_kv binding is not available",
+  "{0} pixels": "{0} pixels"
 }
